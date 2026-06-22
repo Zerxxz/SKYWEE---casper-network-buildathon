@@ -277,18 +277,10 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
         </header>
 
         {/* Page content */}
-        <main className="flex-1 relative">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={active}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25 }}
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
+        <main className="flex-1 relative overflow-hidden">
+          <PageTransition pageId={active}>
+            {children}
+          </PageTransition>
         </main>
 
         {/* Footer */}
@@ -486,3 +478,116 @@ function SidebarContent({
     </div>
   )
 }
+
+/* =================== Page Transition (direction-aware) =================== */
+
+// Page order for direction calculation
+const PAGE_ORDER: PageId[] = [
+  "dashboard",
+  "agent-square",
+  "aegis",
+  "swarm-treasury",
+  "rwa-vault",
+  "carbon-guard",
+  "stack",
+  "buildathon",
+]
+
+interface PageTransitionProps {
+  pageId: PageId
+  children: React.ReactNode
+}
+
+/**
+ * Direction-aware page transition:
+ * - Navigating forward (higher index): slide in from right + scale up
+ * - Navigating backward (lower index): slide in from left + scale up
+ * - Includes blur + opacity for depth
+ * - Staggered children via motion variants
+ */
+function PageTransition({ pageId, children }: PageTransitionProps) {
+  const currentIndex = PAGE_ORDER.indexOf(pageId)
+  const [prevIndex, setPrevIndex] = React.useState(currentIndex)
+  const direction = currentIndex >= prevIndex ? 1 : -1
+
+  // Update prevIndex after render so direction is correct on next navigation
+  React.useEffect(() => {
+    setPrevIndex(currentIndex)
+  }, [currentIndex])
+
+  const xOffset = 40 * direction
+
+  return (
+    <AnimatePresence mode="wait" custom={direction}>
+      <motion.div
+        key={pageId}
+        custom={direction}
+        initial={{
+          opacity: 0,
+          x: xOffset,
+          scale: 0.98,
+          filter: "blur(8px)",
+        }}
+        animate={{
+          opacity: 1,
+          x: 0,
+          scale: 1,
+          filter: "blur(0px)",
+          transition: {
+            duration: 0.4,
+            ease: [0.22, 1, 0.36, 1],
+            opacity: { duration: 0.3, ease: "easeOut" },
+            filter: { duration: 0.35, ease: "easeOut" },
+            scale: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
+            x: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
+          },
+        }}
+        exit={{
+          opacity: 0,
+          x: -xOffset,
+          scale: 0.98,
+          filter: "blur(8px)",
+          transition: {
+            duration: 0.25,
+            ease: [0.4, 0, 1, 1],
+            opacity: { duration: 0.2, ease: "easeIn" },
+            filter: { duration: 0.2, ease: "easeIn" },
+          },
+        }}
+      >
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={{
+            hidden: { transition: { staggerChildren: 0.04, delayChildren: 0.08 } },
+            visible: { transition: { staggerChildren: 0.04, delayChildren: 0.08 } },
+          }}
+        >
+          {children}
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
+/**
+ * Stagger item — wrap any element inside a page to get staggered entrance.
+ */
+export const StaggerItem: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className,
+}) => (
+  <motion.div
+    className={className}
+    variants={{
+      hidden: { opacity: 0, y: 12 },
+      visible: {
+        opacity: 1,
+        y: 0,
+        transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
+      },
+    }}
+  >
+    {children}
+  </motion.div>
+)
