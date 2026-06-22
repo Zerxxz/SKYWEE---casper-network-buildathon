@@ -100,6 +100,8 @@ Odra framework and recorded on-chain.
     │   ├── theme-toggle.tsx           # Sun/Moon toggle
     │   ├── connect-wallet-button.tsx  # Casper Wallet button with dropdown
     │   ├── wallet-status.tsx          # Sidebar wallet status
+    │   ├── live-block-widget.tsx      # Live Casper block height (CSPR.cloud)
+    │   ├── network-status-widget.tsx  # Dashboard network status (CSPR.cloud)
     │   ├── page-header.tsx            # Consistent page header
     │   ├── action-modal.tsx           # Reusable transaction modal
     │   ├── modules/                   # Module content components
@@ -121,8 +123,40 @@ Odra framework and recorded on-chain.
     └── lib/skywee/
         ├── data.ts                    # Static reference data + formatters
         ├── wallet.tsx                 # Casper Wallet provider + context
+        ├── cspr-cloud.ts              # CSPR.cloud REST client (server-side)
+        ├── use-network.ts             # React hooks for live network data
         └── api.ts                     # API route utilities
 ```
+
+---
+
+## ☁️ CSPR.cloud Integration
+
+SKYWEE integrates with the official [CSPR.cloud](https://cspr.cloud) REST API
+for live on-chain data. This powers:
+
+- **Sidebar block height** — auto-refreshes every 10s
+- **Wallet balance** — fetched when you connect your Casper Wallet
+- **Network status widget** — block height, era, peer count, validator count
+- **cspr.live deep links** — every block, account, and deploy links to the
+  public block explorer
+
+### Getting a CSPR.cloud API key
+
+1. Visit <https://cspr.cloud> and sign up (free)
+2. Generate an API key from your account dashboard
+3. Add it to your `.env.local`:
+
+```bash
+CSPR_NETWORK=testnet                              # or mainnet
+CSPR_CLOUD_API_KEY=your_key_here
+```
+
+### Graceful fallback
+
+Without an API key, SKYWEE falls back to cached/synthetic data so the UI
+continues to function. The sidebar widget shows "Cached · set
+CSPR_CLOUD_API_KEY for live" so it's clear when real data is missing.
 
 ---
 
@@ -133,6 +167,7 @@ Odra framework and recorded on-chain.
 - **Bun** ≥ 1.0
 - **Rust** ≥ 1.75 (for contract compilation only)
 - **Casper Wallet** browser extension (optional — demo mode works without it)
+- **CSPR.cloud API key** (optional — cached fallback works without it)
 
 ### Install & Run
 

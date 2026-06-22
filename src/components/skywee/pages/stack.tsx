@@ -27,8 +27,8 @@ const STACK = [
   },
   {
     name: "CSPR.cloud APIs",
-    desc: "Enterprise-grade REST, Streaming, and Node APIs for blockchain interaction at scale — used by every read path in SKYWEE for real-time monitoring.",
-    used: "All modules",
+    desc: "Enterprise-grade REST API for blockchain interaction at scale — SKYWEE uses it for live block height, account balances, era info, peer count, and validator count. Cached 5s server-side to stay under free-tier rate limits.",
+    used: "All modules · Live sidebar · Dashboard network widget",
   },
   {
     name: "Odra Framework",

@@ -2,14 +2,18 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronDown, LogOut, Copy, Check, Zap, Wallet, AlertCircle } from "lucide-react"
+import { ChevronDown, LogOut, Copy, Check, Zap, Wallet, AlertCircle, ExternalLink, Loader2 } from "lucide-react"
 import { useWallet } from "@/lib/skywee/wallet"
+import { useAccountInfo } from "@/lib/skywee/use-network"
 
 export function ConnectWalletButton() {
-  const { status, shortAddress, isDemo, isExtensionInstalled, connect, disconnect, error } = useWallet()
+  const { status, publicKey, shortAddress, isDemo, isExtensionInstalled, connect, disconnect } = useWallet()
   const [open, setOpen] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
   const menuRef = React.useRef<HTMLDivElement>(null)
+
+  // Fetch live account info from CSPR.cloud when connected
+  const { account, loading: accountLoading } = useAccountInfo(publicKey, 15_000)
 
   // Close on outside click
   React.useEffect(() => {
@@ -26,10 +30,14 @@ export function ConnectWalletButton() {
   const isConnected = status === "connected" || status === "demo"
 
   const copyAddress = async () => {
-    // We don't have direct access to full publicKey here — would need to
-    // extend the context. For demo we just toggle the copied state.
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    if (!publicKey) return
+    try {
+      await navigator.clipboard.writeText(publicKey)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // ignore — clipboard not available
+    }
   }
 
   if (!isConnected) {
@@ -59,7 +67,14 @@ export function ConnectWalletButton() {
     )
   }
 
-  // Connected — show address + dropdown
+  // Balance display
+  const balance = account?.balanceCSPR
+  const balanceDisplay = accountLoading
+    ? "Loading…"
+    : balance !== null && balance !== undefined
+      ? `${balance.toLocaleString(undefined, { maximumFractionDigits: 2 })} CSPR`
+      : "—"
+
   return (
     <div className="relative" ref={menuRef}>
       <button
@@ -110,18 +125,24 @@ export function ConnectWalletButton() {
               </div>
             </div>
 
-            {/* Network info */}
+            {/* Balance */}
             <div className="px-3 py-2 border-b border-border">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Network</span>
                 <span className="font-mono">Casper Testnet</span>
               </div>
-              <div className="flex items-center justify-between text-xs mt-1">
+              <div className="flex items-center justify-between text-xs mt-1.5">
                 <span className="text-muted-foreground">Balance</span>
-                <span className="font-mono skywee-tabular">
-                  {isDemo ? "1,000.00" : "—"} CSPR
+                <span className="font-mono skywee-tabular flex items-center gap-1.5">
+                  {accountLoading && <Loader2 size={10} className="animate-spin text-muted-foreground" />}
+                  {balanceDisplay}
                 </span>
               </div>
+              {account?.hasRealData && (
+                <div className="mt-1.5 text-[10px] text-muted-foreground/70 font-mono">
+                  ✓ Live from CSPR.cloud
+                </div>
+              )}
             </div>
 
             {/* Extension hint */}
@@ -147,6 +168,15 @@ export function ConnectWalletButton() {
 
             {/* Actions */}
             <div className="p-1">
+              <a
+                href={account?.explorerUrl ?? `https://testnet.cspr.live/account/${publicKey}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-xs hover:bg-foreground/5 transition-colors"
+              >
+                <ExternalLink size={12} className="text-muted-foreground" />
+                <span>View on cspr.live</span>
+              </a>
               <button
                 type="button"
                 onClick={copyAddress}

@@ -24,6 +24,7 @@ import {
 } from "recharts"
 import { VOLUME_SERIES, MODULE_LABEL } from "@/lib/skywee/data"
 import { PageHeader } from "../page-header"
+import { NetworkStatusWidget } from "../network-status-widget"
 import type { PageId } from "../sidebar-layout"
 
 interface Stats {
@@ -187,60 +188,15 @@ export function DashboardPage({ onNavigate }: { onNavigate: (id: PageId) => void
             ))}
           </div>
 
-          {/* Chart + live feed */}
+          {/* Network status + live feed row */}
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-3">
-            <div className="lg:col-span-7 rounded-xl skywee-glass p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                    Casper Testnet Volume · 24h
-                  </div>
-                  <div className="text-xl font-bold skywee-tabular mt-1">
-                    {VOLUME_SERIES.reduce((s, p) => s + p.volume, 0).toLocaleString()} CSPR
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-foreground/60">
-                  <TrendingUp size={12} />
-                  <span className="font-semibold">+12.4%</span>
-                </div>
-              </div>
-              <div className="h-[220px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={VOLUME_SERIES} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="dashVol" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--foreground)" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="var(--foreground)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" vertical={false} />
-                    <XAxis
-                      dataKey="t"
-                      tick={{ fill: "var(--muted-foreground)", fontSize: 10, fontFamily: "monospace" }}
-                      axisLine={{ stroke: "var(--border)" }}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: "var(--muted-foreground)", fontSize: 10, fontFamily: "monospace" }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={50}
-                      tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}K`}
-                    />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Area
-                      type="monotone"
-                      dataKey="volume"
-                      stroke="var(--foreground)"
-                      strokeWidth={1.5}
-                      fill="url(#dashVol)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+            {/* Casper Network live status */}
+            <div className="lg:col-span-5">
+              <NetworkStatusWidget />
             </div>
 
-            <div className="lg:col-span-5 rounded-xl skywee-glass p-5">
+            {/* Live activity feed */}
+            <div className="lg:col-span-7 rounded-xl skywee-glass p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Activity size={14} className="text-foreground/70" />
@@ -292,6 +248,60 @@ export function DashboardPage({ onNavigate }: { onNavigate: (id: PageId) => void
                   </li>
                 ))}
               </ul>
+            </div>
+          </div>
+
+          {/* Chart full-width row */}
+          <div className="mt-6 grid grid-cols-1 gap-3">
+            <div className="rounded-xl skywee-glass p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                    Casper Testnet Volume · 24h
+                  </div>
+                  <div className="text-xl font-bold skywee-tabular mt-1">
+                    {VOLUME_SERIES.reduce((s, p) => s + p.volume, 0).toLocaleString()} CSPR
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-foreground/60">
+                  <TrendingUp size={12} />
+                  <span className="font-semibold">+12.4%</span>
+                </div>
+              </div>
+              <div className="h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={VOLUME_SERIES} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="dashVol" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--foreground)" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="var(--foreground)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" vertical={false} />
+                    <XAxis
+                      dataKey="t"
+                      tick={{ fill: "var(--muted-foreground)", fontSize: 10, fontFamily: "monospace" }}
+                      axisLine={{ stroke: "var(--border)" }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: "var(--muted-foreground)", fontSize: 10, fontFamily: "monospace" }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={50}
+                      tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}K`}
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="volume"
+                      stroke="var(--foreground)"
+                      strokeWidth={1.5}
+                      fill="url(#dashVol)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 

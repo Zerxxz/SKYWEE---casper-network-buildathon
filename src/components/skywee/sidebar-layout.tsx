@@ -18,6 +18,7 @@ import {
 import { ThemeToggle } from "./theme-toggle"
 import { ConnectWalletButton } from "./connect-wallet-button"
 import { WalletStatus } from "./wallet-status"
+import { LiveBlockWidget } from "./live-block-widget"
 import { MODULES } from "@/lib/skywee/data"
 
 export type PageId =
@@ -311,20 +312,7 @@ function SidebarContent({ groupedNav, active, onNavigate, onClose }: SidebarCont
       {/* Bottom: wallet + live status */}
       <div className="border-t border-border p-3 space-y-2">
         <WalletStatus />
-        <div className="rounded-lg skywee-hairline bg-foreground/[0.02] p-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-              Casper Block
-            </span>
-            <span className="text-[10px] font-mono skywee-tabular">#2,847,195</span>
-          </div>
-          <div className="mt-2 flex items-center gap-1.5">
-            <span className="skywee-pulse-dot h-1.5 w-1.5 rounded-full bg-foreground" />
-            <span className="text-[10px] font-mono text-muted-foreground">
-              Streaming live
-            </span>
-          </div>
-        </div>
+        <LiveBlockWidget />
       </div>
     </div>
   )
