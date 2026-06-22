@@ -362,3 +362,93 @@
   border-radius: 3px;
   opacity: 0.5;
 }
+
+/* ====== SKELETON LOADER ====== */
+@keyframes skywee-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skywee-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    var(--accent) 50%,
+    var(--muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: skywee-shimmer 1.6s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+/* ====== BUTTON MICRO-INTERACTIONS ====== */
+/* Ripple effect container */
+.skywee-btn-ripple {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* Ripple span — created on click */
+.skywee-ripple-span {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--primary-foreground);
+  opacity: 0.4;
+  transform: scale(0);
+  animation: skywee-ripple-anim 0.6s ease-out;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes skywee-ripple-anim {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* Glow effect on hover for primary buttons */
+.skywee-btn-glow {
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.skywee-btn-glow::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: var(--foreground);
+  opacity: 0;
+  filter: blur(8px);
+  z-index: -1;
+  transition: opacity 0.3s ease;
+}
+.skywee-btn-glow:hover::before {
+  opacity: 0.15;
+}
+.skywee-btn-glow:active {
+  transform: scale(0.97);
+}
+
+/* ====== SCROLL REVEAL ====== */
+.skywee-scroll-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.skywee-scroll-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .skywee-skeleton { animation: none; }
+  .skywee-ripple-span { animation: none; opacity: 0; }
+  .skywee-scroll-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .skywee-btn-glow::before { display: none; }
+}

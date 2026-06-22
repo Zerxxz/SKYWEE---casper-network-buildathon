@@ -5,6 +5,8 @@ import { motion } from "framer-motion"
 import { Bot, ArrowRight, Zap } from "lucide-react"
 import { ActionModal, Field, inputCls, selectCls } from "../action-modal"
 import { McpDiscoveryPanel } from "../mcp-discovery-panel"
+import { SkeletonTableRow } from "../skeleton"
+import { ScrollReveal } from "../scroll-reveal"
 import { useWallet } from "@/lib/skywee/wallet"
 import { useDeploySubmit, useCanSignDeploys } from "@/lib/skywee/use-deploy-submit"
 import { useToast } from "@/hooks/use-toast"
@@ -194,8 +196,19 @@ export function AgentSquareModule() {
       {/* Agent registry table */}
       <div className="mt-6 rounded-lg skywee-hairline overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
-            Loading agents from Casper Testnet…
+          <div>
+            {/* Skeleton header */}
+            <div className="border-b border-border bg-foreground/[0.02] px-4 py-2.5 flex gap-4">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} className="flex-1">
+                  <div className="skywee-skeleton h-[10px] w-12" />
+                </div>
+              ))}
+            </div>
+            {/* Skeleton rows */}
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonTableRow key={i} columns={7} />
+            ))}
           </div>
         ) : (
           <>
@@ -291,7 +304,7 @@ export function AgentSquareModule() {
       </div>
 
       {/* x402 payment flow visualization */}
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+      <ScrollReveal className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3" direction="up">
         {[
           { step: "01", title: "Discovery via MCP", desc: "Consumer queries Casper MCP for agents matching a capability. Reputation and price are returned from on-chain registry state." },
           { step: "02", title: "x402 Payment", desc: "Consumer pays the listed price in CSPR via HTTP-native x402 protocol. Payment proof is attached to the request." },
@@ -305,10 +318,12 @@ export function AgentSquareModule() {
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{s.desc}</p>
           </div>
         ))}
-      </div>
+      </ScrollReveal>
 
       {/* MCP Discovery Panel */}
-      <McpDiscoveryPanel />
+      <ScrollReveal className="mt-8" direction="up" delay={0.1}>
+        <McpDiscoveryPanel />
+      </ScrollReveal>
 
       {/* CTA */}
       <div className="mt-6 flex items-center justify-between rounded-lg skywee-hairline bg-foreground/[0.02] p-4">

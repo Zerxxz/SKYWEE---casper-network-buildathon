@@ -3,6 +3,7 @@
 import { motion } from "framer-motion"
 import { Boxes } from "lucide-react"
 import { PageHeader } from "../page-header"
+import { ScrollReveal } from "../scroll-reveal"
 
 const STACK = [
   {
@@ -48,7 +49,7 @@ export function StackPage() {
         icon={Boxes}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <ScrollReveal className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" direction="up">
         {STACK.map((s, i) => (
           <motion.div
             key={s.name}
@@ -72,15 +73,11 @@ export function StackPage() {
             </div>
           </motion.div>
         ))}
-      </div>
+      </ScrollReveal>
 
       {/* Casper Manifest reference */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="mt-6 rounded-xl skywee-glass-strong p-6 sm:p-8"
-      >
+      <ScrollReveal className="mt-6" direction="up" delay={0.1}>
+      <div className="rounded-xl skywee-glass-strong p-6 sm:p-8">
         <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
           Casper Manifest
         </div>
@@ -108,7 +105,8 @@ export function StackPage() {
             <div className="mt-1 text-sm font-semibold">PoS consensus</div>
           </div>
         </div>
-      </motion.div>
+      </div>
+      </ScrollReveal>
     </div>
   )
 }

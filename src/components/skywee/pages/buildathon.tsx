@@ -3,6 +3,7 @@
 import { motion } from "framer-motion"
 import { Github, ArrowUpRight, Calendar, Trophy, FileText, Video } from "lucide-react"
 import { PageHeader } from "../page-header"
+import { ScrollReveal } from "../scroll-reveal"
 
 export function BuildathonPage() {
   return (
@@ -128,7 +129,7 @@ export function BuildathonPage() {
       </motion.div>
 
       {/* Judging criteria */}
-      <div className="mt-6">
+      <ScrollReveal className="mt-6" direction="up">
         <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-4">
           Final Round Judging Criteria
         </div>
@@ -152,7 +153,7 @@ export function BuildathonPage() {
             </div>
           ))}
         </div>
-      </div>
+      </ScrollReveal>
     </div>
   )
 }

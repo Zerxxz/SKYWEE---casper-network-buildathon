@@ -25,6 +25,8 @@ import {
 import { VOLUME_SERIES, MODULE_LABEL } from "@/lib/skywee/data"
 import { PageHeader } from "../page-header"
 import { NetworkStatusWidget } from "../network-status-widget"
+import { Skeleton, SkeletonCard, SkeletonChart, SkeletonListItem } from "../skeleton"
+import { ScrollReveal } from "../scroll-reveal"
 import type { PageId } from "../sidebar-layout"
 
 interface Stats {
@@ -156,11 +158,45 @@ export function DashboardPage({ onNavigate }: { onNavigate: (id: PageId) => void
       />
 
       {loading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="rounded-xl skywee-glass p-5 h-[140px] animate-pulse bg-foreground/[0.02]" />
-          ))}
-        </div>
+        <>
+          {/* Skeleton KPI grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+          {/* Skeleton network + feed */}
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-3">
+            <div className="lg:col-span-5">
+              <div className="rounded-xl skywee-glass p-5">
+                <Skeleton width={120} height={14} />
+                <Skeleton width={80} height={20} className="mt-2" />
+                <div className="mt-4 grid grid-cols-2 gap-px">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="p-2.5">
+                      <Skeleton width={50} height={10} />
+                      <Skeleton width={70} height={14} className="mt-1" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="lg:col-span-7">
+              <div className="rounded-xl skywee-glass p-5">
+                <Skeleton width={100} height={14} />
+                <div className="mt-4 space-y-2.5">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <SkeletonListItem key={i} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Skeleton chart */}
+          <div className="mt-6">
+            <SkeletonChart />
+          </div>
+        </>
       ) : (
         <>
           {/* KPI grid */}
@@ -306,7 +342,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (id: PageId) => void
           </div>
 
           {/* Module grid */}
-          <div className="mt-8">
+          <ScrollReveal className="mt-8" direction="up">
             <div className="flex items-center gap-2 mb-4">
               <Zap size={12} className="text-muted-foreground" />
               <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
@@ -369,7 +405,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (id: PageId) => void
                 </div>
               </motion.button>
             </div>
-          </div>
+          </ScrollReveal>
         </>
       )}
     </div>

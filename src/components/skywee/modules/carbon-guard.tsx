@@ -4,6 +4,7 @@ import * as React from "react"
 import { motion } from "framer-motion"
 import { Leaf, ArrowRight, Satellite, AlertTriangle, Zap, Flame } from "lucide-react"
 import { ActionModal, Field, inputCls, selectCls } from "../action-modal"
+import { ScrollReveal } from "../scroll-reveal"
 import { useWallet } from "@/lib/skywee/wallet"
 import { useToast } from "@/hooks/use-toast"
 
@@ -291,7 +292,7 @@ export function CarbonGuardModule() {
       </div>
 
       {/* Verification pipeline */}
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-3">
+      <ScrollReveal className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-3" direction="up">
         {[
           { step: "01", title: "Satellite pull", desc: "VER-Gaia fetches latest imagery via x402." },
           { step: "02", title: "Biomass delta", desc: "ML model computes NDVI delta vs baseline." },
@@ -304,7 +305,7 @@ export function CarbonGuardModule() {
             <div className="mt-1 text-xs text-muted-foreground leading-relaxed">{s.desc}</div>
           </div>
         ))}
-      </div>
+      </ScrollReveal>
 
       <div className="mt-6 flex items-center justify-between rounded-lg skywee-hairline bg-foreground/[0.02] p-4">
         <div>
