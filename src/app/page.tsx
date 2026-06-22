@@ -1,37 +1,37 @@
 "use client"
 
-import { SkyweeHeader } from "@/components/skywee/header"
-import { SkyweeHero } from "@/components/skywee/hero"
-import { SkyweeTicker } from "@/components/skywee/ticker"
-import { SkyweeArchitecture } from "@/components/skywee/architecture"
-import { SkyweeModules } from "@/components/skywee/modules-section"
-import { SkyweeActivityFeed } from "@/components/skywee/activity-feed"
-import { SkyweeStack } from "@/components/skywee/casper-stack"
-import { SkyweeBuildathon } from "@/components/skywee/buildathon"
-import { SkyweeFooter } from "@/components/skywee/footer"
+import * as React from "react"
+import { SidebarLayout, type PageId } from "@/components/skywee/sidebar-layout"
+import { DashboardPage } from "@/components/skywee/pages/dashboard"
+import { AgentSquarePage } from "@/components/skywee/pages/agent-square"
+import { AegisPage } from "@/components/skywee/pages/aegis"
+import { SwarmTreasuryPage } from "@/components/skywee/pages/swarm-treasury"
+import { RwaVaultPage } from "@/components/skywee/pages/rwa-vault"
+import { CarbonGuardPage } from "@/components/skywee/pages/carbon-guard"
+import { StackPage } from "@/components/skywee/pages/stack"
+import { BuildathonPage } from "@/components/skywee/pages/buildathon"
 
 export default function Home() {
+  const [page, setPage] = React.useState<PageId>("dashboard")
+
+  const handleNavigate = React.useCallback((id: PageId) => {
+    setPage(id)
+    // Scroll to top on page change
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" })
+    }
+  }, [])
+
   return (
-    <div id="top" className="relative min-h-screen flex flex-col bg-background">
-      {/* Subtle grain texture overlay */}
-      <div className="skywee-grain" aria-hidden />
-
-      {/* Header */}
-      <SkyweeHeader />
-
-      {/* Main */}
-      <main className="flex-1">
-        <SkyweeHero />
-        <SkyweeTicker />
-        <SkyweeArchitecture />
-        <SkyweeModules />
-        <SkyweeActivityFeed />
-        <SkyweeStack />
-        <SkyweeBuildathon />
-      </main>
-
-      {/* Footer */}
-      <SkyweeFooter />
-    </div>
+    <SidebarLayout active={page} onNavigate={handleNavigate}>
+      {page === "dashboard" && <DashboardPage onNavigate={handleNavigate} />}
+      {page === "agent-square" && <AgentSquarePage />}
+      {page === "aegis" && <AegisPage />}
+      {page === "swarm-treasury" && <SwarmTreasuryPage />}
+      {page === "rwa-vault" && <RwaVaultPage />}
+      {page === "carbon-guard" && <CarbonGuardPage />}
+      {page === "stack" && <StackPage />}
+      {page === "buildathon" && <BuildathonPage />}
+    </SidebarLayout>
   )
 }
