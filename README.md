@@ -124,8 +124,22 @@ Odra framework and recorded on-chain.
         ├── data.ts                    # Static reference data + formatters
         ├── wallet.tsx                 # Casper Wallet provider + context
         ├── cspr-cloud.ts              # CSPR.cloud REST client (server-side)
+        ├── casper-deploy.ts           # Deploy construction + signing (casper-js-sdk)
+        ├── casper-mcp.ts              # Casper MCP server client (server-side)
         ├── use-network.ts             # React hooks for live network data
+        ├── use-deploy-submit.ts       # React hook for deploy submission
+        ├── use-mcp.ts                 # React hooks for MCP discovery
         └── api.ts                     # API route utilities
+
+scripts/                                # Deployment & seeding scripts
+├── deploy.ts                          # Master deployment script (one-command)
+├── deploy-config.ts                   # Contract + agent + network config
+├── deploy-logger.ts                   # Pretty console logger
+├── contract-deployer.ts               # Odra CLI wrapper for contract deploy
+├── agent-seeder.ts                    # Seeds 8 initial agents on-chain + DB
+├── env-updater.ts                     # Updates .env.local with deploy results
+├── health-check.ts                    # Verifies deployment health
+└── seed.ts                            # Original DB-only seed script
 ```
 
 ---
@@ -186,31 +200,112 @@ bun run dev
 # → http://localhost:3000
 ```
 
-### Deploy the Smart Contracts (production)
+### Deploy the Smart Contracts (one-command deployment)
 
-The Odra contracts in `contracts/odra/` are written for the Casper Testnet.
-To compile and deploy them (requires Rust + cargo):
+SKYWEE includes a master deployment script that handles everything in one
+command: compile contracts, deploy to Casper Testnet, seed initial agents,
+update environment configuration, and run a health check.
+
+#### Prerequisites (for real deploy)
+
+- **Rust** + cargo: <https://rustup.rs>
+- **Odra CLI**: `cargo install odra-cli`
+- **Casper Wallet key file** (.pem): generate with `casper-client keygen` or
+  export from your Casper Wallet extension
+- **Testnet CSPR** for gas: get from faucet at <https://testnet.cspr.live/faucet>
+
+#### Quick start
 
 ```bash
-cd contracts/odra
-cargo build --release
-cargo run --bin deploy_skywee -- --network testnet --key ~/.casper/testnet/secret_key.pem
+# 1. Test the deployment logic without gas (recommended first run)
+bun run deploy:dry-run
+
+# 2. Real deploy to Casper Testnet
+bun run deploy -- --key ~/.casper/testnet/secret_key.pem
+
+# 3. With optional CSPR.cloud API key + MCP server URL
+bun run deploy -- \
+  --key ~/.casper/testnet/secret_key.pem \
+  --cspr-cloud-key your_cspr_cloud_api_key \
+  --mcp-url http://localhost:3001
 ```
 
-The deploy script prints 5 contract addresses. Add them to `.env.local`:
+The script performs 4 steps automatically:
+
+| Step | Action | Result |
+|------|--------|--------|
+| 1 | **Deploy Contracts** | Compiles 5 Odra contracts via `cargo build --release`, deploys each to Casper Testnet via `odra deploy`, saves hashes to `.skywee-deploy/` state files |
+| 2 | **Seed Agents** | Registers 8 initial SKYWEE agents (RYSK-7, YLR-3, EXE-Max, ORC-12, MM-Aria, VER-Gaia, CMP-Vera, TRS-Odin) on-chain + in DB. Authorizes 1 Aegis monitor, 1 CarbonGuard verifier, 5 SwarmTreasury swarm agents |
+| 3 | **Update .env.local** | Writes all contract hashes + RPC URL + network name + chain name to `.env` so the Next.js app can use them |
+| 4 | **Health Check** | Verifies deploy state, env config, DB agents, activity feed, and network reachability |
+
+#### Other modes
 
 ```bash
-NEXT_PUBLIC_AGENT_REGISTRY_ADDR=hash_...
-NEXT_PUBLIC_INSURANCE_ADDR=hash_...
-NEXT_PUBLIC_TREASURY_ADDR=hash_...
-NEXT_PUBLIC_RWA_VAULT_ADDR=hash_...
-NEXT_PUBLIC_CARBON_GUARD_ADDR=hash_...
+# Only run health check (verify deployment is healthy)
+bun run deploy:health
+
+# Only seed agents (skip contract deploy, use existing .skywee-deploy/ state)
+bun run deploy:seed-only
+
+# Only update .env.local from existing deploy state
+bun run scripts/deploy.ts --env-only
+
+# Deploy to mainnet (USE WITH CAUTION)
+bun run deploy -- --network mainnet --key ~/.casper/mainnet/secret_key.pem
+
+# Skip cargo build (use existing build)
+bun run deploy -- --key ~/.casper/testnet/secret_key.pem --skip-build
 ```
 
-> **Note:** In the prototype, the Next.js API routes simulate the on-chain
+#### What gets deployed
+
+| Contract | Module | Description |
+|----------|--------|-------------|
+| AgentRegistry | `agent_registry` | AgentSquare — agent registration & reputation attestation |
+| InsuranceContract | `insurance` | Aegis — parametric insurance with autonomous payout |
+| TreasuryContract | `treasury` | SwarmTreasury — multi-agent DAO execution |
+| RwaVault | `rwa_vault` | RWA-X Vault — fractionalization + agent-managed AMM |
+| CarbonGuard | `carbon_guard` | CarbonGuard — autonomous carbon verification + burn |
+
+#### Initial agents seeded
+
+| Name | Role | Price/Request | Reputation |
+|------|------|--------------|------------|
+| RYSK-7 | risk-scorer | 0.42 CSPR | 98 |
+| YLR-3 | yield-router | 0.18 CSPR | 95 |
+| EXE-Max | executor | free | 96 |
+| ORC-12 | oracle | 0.31 CSPR | 92 |
+| MM-Aria | market-maker | 0.12 CSPR | 94 |
+| VER-Gaia | verifier | 0.55 CSPR | 99 |
+| CMP-Vera | compliance | 0.38 CSPR | 91 |
+| TRS-Odin | treasurer | free | 97 |
+
+Plus 5 SwarmTreasury agents authorized for consensus voting, 1 Aegis monitor
+(ORC-12), and 1 CarbonGuard verifier (VER-Gaia).
+
+#### Deployment state
+
+Contract hashes are saved to `.skywee-deploy/<module>.json`:
+
+```json
+{
+  "module": "agent_registry",
+  "name": "AgentRegistry",
+  "hash": "hash-abc123...",
+  "deployHash": "0xdef456...",
+  "deployedAt": "2026-06-23T18:50:05.000Z",
+  "network": "testnet"
+}
+```
+
+This allows re-running `--seed-only` or `--env-only` without re-deploying.
+
+> **Note:** In the prototype, the Next.js API routes simulate on-chain
 > contract calls by writing to the local SQLite database. When the real
-> contracts are deployed, the API routes should be updated to construct and
-> sign deploys via the Casper SDK instead.
+> contracts are deployed, the modal submit flow will automatically detect
+> the Casper Wallet extension and broadcast real signed deploys via the
+> `/api/skywee/deploys/broadcast` route.
 
 ---
 
