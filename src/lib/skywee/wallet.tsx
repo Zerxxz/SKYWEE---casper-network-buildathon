@@ -21,7 +21,7 @@ export interface CasperWalletProvider {
   ): Promise<{ signature?: string; cancelled?: boolean }>
   signDeploy(
     deploy: unknown,
-    publicKey: string,
+    signingPublicKey: string,
   ): Promise<{ deploy?: unknown; cancelled?: boolean }>
   on(event: "connected", cb: () => void): () => void
   on(event: "disconnected", cb: () => void): () => void
@@ -48,6 +48,12 @@ export interface WalletContextValue extends WalletState {
   disconnect: () => Promise<void>
   enterDemoMode: () => void
   shortAddress: string | null
+  /**
+   * Sign a deploy via the Casper Wallet extension.
+   * Throws if in demo mode or extension unavailable.
+   * Returns the signed deploy JSON.
+   */
+  signDeploy: (deployJson: unknown) => Promise<unknown>
 }
 
 const WalletContext = React.createContext<WalletContextValue | null>(null)
@@ -225,15 +231,48 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }))
   }, [])
 
+  /**
+   * Sign a deploy via the Casper Wallet extension.
+   * Throws if demo mode or extension unavailable.
+   */
+  const signDeploy = React.useCallback(
+    async (deployJson: unknown): Promise<unknown> => {
+      if (state.isDemo) {
+        throw new Error("Cannot sign deploys in demo mode")
+      }
+      if (typeof window === "undefined" || !window.casperWalletProvider) {
+        throw new Error("Casper Wallet extension not available")
+      }
+      if (!state.publicKey) {
+        throw new Error("No active public key")
+      }
+
+      const result = await window.casperWalletProvider.signDeploy(
+        deployJson,
+        state.publicKey,
+      )
+
+      if (result.cancelled) {
+        throw new Error("User cancelled the signing request")
+      }
+      if (!result.deploy) {
+        throw new Error("Wallet did not return a signed deploy")
+      }
+      return result.deploy
+    },
+    [state.isDemo, state.publicKey],
+  )
+
   const value: WalletContextValue = React.useMemo(
     () => ({
       ...state,
       connect,
       disconnect,
       enterDemoMode,
+      signDeploy,
       shortAddress: shortKey(state.publicKey),
     }),
-    [state, connect, disconnect, enterDemoMode],
+    [state, connect, disconnect, enterDemoMode, signDeploy],
   )
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>

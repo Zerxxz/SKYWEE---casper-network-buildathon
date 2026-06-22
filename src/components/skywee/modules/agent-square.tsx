@@ -4,7 +4,9 @@ import * as React from "react"
 import { motion } from "framer-motion"
 import { Bot, ArrowRight, Zap } from "lucide-react"
 import { ActionModal, Field, inputCls, selectCls } from "../action-modal"
+import { McpDiscoveryPanel } from "../mcp-discovery-panel"
 import { useWallet } from "@/lib/skywee/wallet"
+import { useDeploySubmit, useCanSignDeploys } from "@/lib/skywee/use-deploy-submit"
 import { useToast } from "@/hooks/use-toast"
 
 interface DbAgent {
@@ -75,6 +77,8 @@ export function AgentSquareModule() {
   const [loading, setLoading] = React.useState(true)
   const [modalOpen, setModalOpen] = React.useState(false)
   const { publicKey, isDemo, shortAddress } = useWallet()
+  const deploySubmit = useDeploySubmit()
+  const canSignDeploys = useCanSignDeploys()
   const { toast } = useToast()
 
   // Form state
@@ -100,19 +104,41 @@ export function AgentSquareModule() {
 
   const handleSubmit = async () => {
     if (!publicKey) throw new Error("Connect your wallet first")
-    const res = await fetch("/api/skywee/agents/deploy", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+
+    // Attempt real Casper deploy first (when wallet extension available)
+    const result = await deploySubmit({
+      module: "agent_registry",
+      entryPoint: "register_agent",
+      args: {
         name: formName,
         role: formRole,
-        pricePerRequest: parseFloat(formPrice) || 0,
-        ownerAddress: publicKey,
-      }),
+        price_per_request: parseFloat(formPrice) || 0,
+      },
+      onBroadcastSuccess: async () => {
+        // After deploy is broadcast (or simulated), call our DB-writing API
+        // to record the agent in the local DB.
+        const res = await fetch("/api/skywee/agents/deploy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formName,
+            role: formRole,
+            pricePerRequest: parseFloat(formPrice) || 0,
+            ownerAddress: publicKey,
+          }),
+        })
+        const json = await res.json()
+        if (!json.ok) throw new Error(json.error || "Failed to deploy agent")
+        return json.data
+      },
     })
-    const json = await res.json()
-    if (!json.ok) throw new Error(json.error || "Failed to deploy agent")
-    return json.data
+
+    return {
+      hash: result.hash,
+      explorerUrl: result.explorerUrl,
+      broadcast: result.broadcast,
+      ...(result.data as object),
+    }
   }
 
   const handleSuccess = () => {
@@ -281,6 +307,9 @@ export function AgentSquareModule() {
         ))}
       </div>
 
+      {/* MCP Discovery Panel */}
+      <McpDiscoveryPanel />
+
       {/* CTA */}
       <div className="mt-6 flex items-center justify-between rounded-lg skywee-hairline bg-foreground/[0.02] p-4">
         <div>
@@ -315,6 +344,7 @@ export function AgentSquareModule() {
         icon={<Bot size={16} />}
         onSubmit={handleSubmit}
         submitLabel="Deploy Agent"
+        deployMode={canSignDeploys ? "live" : "simulation"}
         successTitle="Agent deployed successfully"
         successMessage="Your agent is now registered on-chain and discoverable via Casper MCP."
         onSuccess={handleSuccess}

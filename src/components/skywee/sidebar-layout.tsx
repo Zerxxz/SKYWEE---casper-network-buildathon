@@ -83,6 +83,7 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
       {/* ====== GLOBAL SKYWEE WATERMARK ====== */}
       <div className="skywee-global-watermark" aria-hidden>
         <span className="skywee-global-watermark-text">SKYWEE</span>
+        <span className="skywee-global-watermark-tagline">Agentic Web3 OS</span>
       </div>
       <div className="skywee-grain" aria-hidden />
 

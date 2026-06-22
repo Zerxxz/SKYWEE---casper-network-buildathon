@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Loader2, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react"
+import { X, Loader2, CheckCircle2, AlertCircle, ArrowRight, ExternalLink } from "lucide-react"
 
 export interface ActionModalProps {
   open: boolean
@@ -19,6 +19,8 @@ export interface ActionModalProps {
   successHashLabel?: string
   /** When the modal closes after success, called. */
   onSuccess?: () => void
+  /** Deploy mode badge — "live" | "simulation" | null */
+  deployMode?: "live" | "simulation" | null
 }
 
 type Phase = "form" | "submitting" | "success" | "error"
@@ -36,6 +38,7 @@ export function ActionModal({
   successMessage,
   successHashLabel = "Transaction Hash",
   onSuccess,
+  deployMode,
 }: ActionModalProps) {
   const [phase, setPhase] = React.useState<Phase>("form")
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null)
@@ -124,6 +127,22 @@ export function ActionModal({
                     exit={{ opacity: 0 }}
                   >
                     {children}
+                    {deployMode && (
+                      <div className="mt-3 mb-1 flex items-center justify-between px-2.5 py-1.5 rounded-md bg-foreground/[0.03] border border-border/60">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                          Deploy Mode
+                        </span>
+                        {deployMode === "live" ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono uppercase rounded bg-foreground text-background">
+                            Live · Casper Testnet
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono uppercase rounded bg-foreground/10 text-muted-foreground">
+                            Simulation
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={handleSubmit}
@@ -146,7 +165,9 @@ export function ActionModal({
                     <Loader2 size={28} className="animate-spin text-foreground/70" />
                     <div className="mt-4 text-sm font-semibold">Submitting transaction…</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
-                      Signing deploy with Casper Wallet &amp; broadcasting to Testnet.
+                      {deployMode === "live"
+                        ? "Signing deploy with Casper Wallet & broadcasting to Testnet."
+                        : "Recording transaction in simulation mode."}
                     </div>
                   </motion.div>
                 )}
@@ -166,10 +187,33 @@ export function ActionModal({
                     )}
                     {result?.hash && (
                       <div className="mt-4 w-full rounded-lg skywee-hairline bg-foreground/[0.02] p-3 text-left">
-                        <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                          {successHashLabel}
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                            {successHashLabel}
+                          </div>
+                          {result?.broadcast === "live" && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono uppercase rounded bg-foreground text-background">
+                              Live
+                            </span>
+                          )}
+                          {result?.broadcast === "simulation" && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono uppercase rounded bg-foreground/10 text-muted-foreground">
+                              Simulation
+                            </span>
+                          )}
                         </div>
-                        <div className="mt-1 font-mono text-[11px] break-all">{result.hash}</div>
+                        <div className="font-mono text-[11px] break-all">{result.hash}</div>
+                        {result?.explorerUrl && typeof result.explorerUrl === "string" && (
+                          <a
+                            href={result.explorerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            View on cspr.live
+                            <ExternalLink size={9} />
+                          </a>
+                        )}
                       </div>
                     )}
                     <button

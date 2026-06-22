@@ -179,27 +179,65 @@
 }
 
 /* ====== GLOBAL SKYWEE WATERMARK (always behind everything) ====== */
+/* Elegant subtle watermark — small, positioned bottom-right corner,
+   with a soft repeat pattern across the page for texture. */
 .skywee-global-watermark {
   position: fixed;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   pointer-events: none;
   overflow: hidden;
   z-index: 0;
 }
+
+/* Subtle dotted pattern using "SKYWEE" letters, very faint, repeated */
+.skywee-global-watermark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle at center,
+    var(--skywee-bg-watermark) 1px,
+    transparent 1px
+  );
+  background-size: 28px 28px;
+  opacity: 0.4;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 30%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 30%, transparent 80%);
+}
+
+/* Main "SKYWEE" wordmark — small, elegant, bottom-right corner */
 .skywee-global-watermark-text {
+  position: absolute;
+  bottom: 8%;
+  right: 4%;
   font-family: var(--font-geist-sans), sans-serif;
   font-weight: 900;
-  font-size: clamp(10rem, 42vw, 36rem);
-  letter-spacing: -0.08em;
+  font-size: clamp(3rem, 9vw, 8rem);
+  letter-spacing: -0.06em;
   line-height: 0.85;
   color: var(--skywee-bg-watermark);
   white-space: nowrap;
   user-select: none;
-  transform: scale(1.05);
-  transition: color 0.4s ease;
+  transition: color 0.4s ease, opacity 0.4s ease;
+  opacity: 0.85;
+  text-align: right;
+}
+
+/* Small tagline under the wordmark */
+.skywee-global-watermark-tagline {
+  position: absolute;
+  bottom: calc(8% - 1.6rem);
+  right: 4%;
+  font-family: var(--font-geist-mono), monospace;
+  font-weight: 400;
+  font-size: clamp(0.5rem, 1vw, 0.7rem);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--skywee-bg-watermark);
+  white-space: nowrap;
+  user-select: none;
+  opacity: 0.7;
+  text-align: right;
 }
 
 /* Subtle grain texture — global, fixed */
