@@ -486,7 +486,12 @@ function ParallaxWatermark() {
           transform: enabled ? `translate(${offset.x * 0.5}px, ${offset.y * 0.5}px)` : undefined,
         }}
       >
-        <span className="skywee-global-watermark-center">SKYWEE</span>
+        <span
+          className="skywee-global-watermark-center"
+          style={{ opacity: 1 }}
+        >
+          SKYWEE
+        </span>
       </div>
       {/* Corner watermark — small, elegant, bottom-right */}
       <div
@@ -495,8 +500,18 @@ function ParallaxWatermark() {
           transform: enabled ? `translate(${offset.x}px, ${offset.y}px)` : undefined,
         }}
       >
-        <span className="skywee-global-watermark-text">SKYWEE</span>
-        <span className="skywee-global-watermark-tagline">Agentic Web3 OS</span>
+        <span
+          className="skywee-global-watermark-text"
+          style={{ opacity: 1 }}
+        >
+          SKYWEE
+        </span>
+        <span
+          className="skywee-global-watermark-tagline"
+          style={{ opacity: 1 }}
+        >
+          Agentic Web3 OS
+        </span>
       </div>
     </div>
   )

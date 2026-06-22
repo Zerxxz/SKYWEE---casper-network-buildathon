@@ -79,7 +79,7 @@
   --sidebar-ring: oklch(0.08 0 0);
 
   /* Skywee-specific tokens */
-  --skywee-bg-watermark: oklch(0 0 0 / 0.025);
+  --skywee-bg-watermark: oklch(0 0 0 / 0.08);
   --skywee-grid-line: oklch(0 0 0 / 0.04);
   --skywee-glass-bg: oklch(1 0 0 / 0.65);
   --skywee-glass-border: oklch(0 0 0 / 0.10);
@@ -125,7 +125,7 @@
   --sidebar-ring: oklch(0.985 0 0);
 
   /* Skywee-specific tokens */
-  --skywee-bg-watermark: oklch(1 0 0 / 0.03);
+  --skywee-bg-watermark: oklch(1 0 0 / 0.08);
   --skywee-grid-line: oklch(1 0 0 / 0.04);
   --skywee-glass-bg: oklch(0.10 0 0 / 0.55);
   --skywee-glass-border: oklch(1 0 0 / 0.10);
@@ -254,7 +254,7 @@
   color: var(--skywee-bg-watermark);
   white-space: nowrap;
   user-select: none;
-  opacity: 0.5;
+  opacity: 1;
   text-align: center;
   pointer-events: none;
 }
