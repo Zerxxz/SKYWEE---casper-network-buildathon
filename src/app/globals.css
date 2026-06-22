@@ -452,3 +452,45 @@
   }
   .skywee-btn-glow::before { display: none; }
 }
+
+/* ====== CUSTOM CURSOR ====== */
+.skywee-cursor-dot,
+.skywee-cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 9999;
+  border-radius: 50%;
+  translate: -50% -50%;
+}
+
+/* Inner dot — small, solid */
+.skywee-cursor-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--foreground);
+  mix-blend-mode: difference;
+}
+
+/* Outer ring — larger, hollow */
+.skywee-cursor-ring {
+  width: 28px;
+  height: 28px;
+  border: 1.5px solid var(--foreground);
+  mix-blend-mode: difference;
+}
+
+/* Hide native cursor on desktop (cursor is replaced) */
+@media (min-width: 768px) and (pointer: fine) {
+  body.skywee-custom-cursor-active,
+  body.skywee-custom-cursor-active * {
+    cursor: none !important;
+  }
+}
+
+/* ====== PARALLAX WATERMARK ====== */
+.skywee-watermark-parallax {
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}

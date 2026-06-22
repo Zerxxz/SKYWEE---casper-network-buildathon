@@ -21,6 +21,7 @@ import { ThemeToggle } from "./theme-toggle"
 import { ConnectWalletButton } from "./connect-wallet-button"
 import { WalletStatus } from "./wallet-status"
 import { LiveBlockWidget } from "./live-block-widget"
+import { CustomCursor } from "./custom-cursor"
 import { useMagnetic } from "@/lib/skywee/use-magnetic"
 import { MODULES } from "@/lib/skywee/data"
 
@@ -161,11 +162,11 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
 
   return (
     <div className="relative min-h-screen flex bg-background">
-      {/* ====== GLOBAL SKYWEE WATERMARK ====== */}
-      <div className="skywee-global-watermark" aria-hidden>
-        <span className="skywee-global-watermark-text">SKYWEE</span>
-        <span className="skywee-global-watermark-tagline">Agentic Web3 OS</span>
-      </div>
+      {/* ====== CUSTOM CURSOR (desktop only) ====== */}
+      <CustomCursor />
+
+      {/* ====== GLOBAL SKYWEE WATERMARK (parallax on mouse move) ====== */}
+      <ParallaxWatermark />
       <div className="skywee-grain" aria-hidden />
 
       {/* ====== SIDEBAR (desktop + tablet) — collapsible ====== */}
@@ -436,6 +437,55 @@ function SidebarContent({
           <LiveBlockWidget compact />
         </div>
       )}
+    </div>
+  )
+}
+
+/* =================== Parallax Watermark =================== */
+
+/**
+ * SKYWEE watermark with subtle parallax on mouse move.
+ * The watermark drifts slightly opposite to cursor movement, creating depth.
+ * Disabled on touch devices & reduced motion.
+ */
+function ParallaxWatermark() {
+  const [offset, setOffset] = React.useState({ x: 0, y: 0 })
+  const [enabled, setEnabled] = React.useState(false)
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    const coarsePointer = window.matchMedia("(pointer: coarse)").matches
+    setEnabled(!reducedMotion && !coarsePointer)
+  }, [])
+
+  React.useEffect(() => {
+    if (!enabled) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const centerX = window.innerWidth / 2
+      const centerY = window.innerHeight / 2
+      // Subtle parallax — max 15px movement
+      const x = ((e.clientX - centerX) / centerX) * -15
+      const y = ((e.clientY - centerY) / centerY) * -15
+      setOffset({ x, y })
+    }
+
+    window.addEventListener("mousemove", handleMouseMove)
+    return () => window.removeEventListener("mousemove", handleMouseMove)
+  }, [enabled])
+
+  return (
+    <div className="skywee-global-watermark" aria-hidden>
+      <div
+        className="skywee-watermark-parallax"
+        style={{
+          transform: enabled ? `translate(${offset.x}px, ${offset.y}px)` : undefined,
+        }}
+      >
+        <span className="skywee-global-watermark-text">SKYWEE</span>
+        <span className="skywee-global-watermark-tagline">Agentic Web3 OS</span>
+      </div>
     </div>
   )
 }

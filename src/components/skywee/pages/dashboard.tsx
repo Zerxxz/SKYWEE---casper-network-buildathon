@@ -27,6 +27,7 @@ import { PageHeader } from "../page-header"
 import { NetworkStatusWidget } from "../network-status-widget"
 import { Skeleton, SkeletonCard, SkeletonChart, SkeletonListItem } from "../skeleton"
 import { ScrollReveal } from "../scroll-reveal"
+import { CountUp } from "../count-up"
 import type { PageId } from "../sidebar-layout"
 
 interface Stats {
@@ -139,12 +140,12 @@ export function DashboardPage({ onNavigate }: { onNavigate: (id: PageId) => void
 
   const kpi = stats
     ? [
-        { label: "Agents Active", value: stats.agents.active.toString(), sub: `of ${stats.agents.total} registered`, delta: "+12 this week" },
-        { label: "RWA AUM", value: fmtUsd(stats.rwa.aum), sub: `${stats.rwa.assetCount} assets on-chain`, delta: "+8.4% / 30d" },
-        { label: "Treasury AUM", value: "$8.41M", sub: `${stats.treasury.openProposals} open proposals`, delta: "+2.1% / 7d" },
-        { label: "Carbon Retired", value: stats.carbon.creditsRetired.toLocaleString(), sub: "tCO\u2082e autonomous", delta: "+1,200 / 24h" },
-        { label: "Insurance Coverage", value: fmtUsd(stats.insurance.coverage), sub: `${stats.insurance.activePolicies} active policies`, delta: `${stats.insurance.triggeredPolicies} triggered` },
-        { label: "24h Volume", value: fmtCspr(184_201), sub: "x402 payments", delta: "+24% vs avg" },
+        { label: "Agents Active", numValue: stats.agents.active, format: "number" as const, sub: `of ${stats.agents.total} registered`, delta: "+12 this week" },
+        { label: "RWA AUM", numValue: stats.rwa.aum, format: "usd" as const, sub: `${stats.rwa.assetCount} assets on-chain`, delta: "+8.4% / 30d" },
+        { label: "Treasury AUM", numValue: 8_412_000, format: "usd" as const, sub: `${stats.treasury.openProposals} open proposals`, delta: "+2.1% / 7d" },
+        { label: "Carbon Retired", numValue: stats.carbon.creditsRetired, format: "number" as const, suffix: " tCO\u2082e", sub: "autonomous", delta: "+1,200 / 24h" },
+        { label: "Insurance Coverage", numValue: stats.insurance.coverage, format: "usd" as const, sub: `${stats.insurance.activePolicies} active policies`, delta: `${stats.insurance.triggeredPolicies} triggered` },
+        { label: "24h Volume", numValue: 184_201, format: "cspr" as const, sub: "x402 payments", delta: "+24% vs avg" },
       ]
     : []
 
@@ -213,7 +214,11 @@ export function DashboardPage({ onNavigate }: { onNavigate: (id: PageId) => void
                   {k.label}
                 </div>
                 <div className="mt-2 text-2xl sm:text-3xl font-bold skywee-tabular">
-                  {k.value}
+                  <CountUp
+                    value={k.numValue}
+                    format={k.format}
+                    suffix={"suffix" in k ? k.suffix : undefined}
+                  />
                 </div>
                 <div className="mt-1 text-[10px] text-muted-foreground/70">{k.sub}</div>
                 <div className="mt-3 pt-3 border-t border-border/50 flex items-center gap-1.5 text-[10px] font-mono">
