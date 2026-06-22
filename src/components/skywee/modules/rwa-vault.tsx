@@ -13,6 +13,7 @@ import {
   CartesianGrid,
 } from "recharts"
 import { ActionModal, Field, inputCls, selectCls } from "../action-modal"
+import { MagneticWrapper } from "../magnetic-wrapper"
 import { useWallet } from "@/lib/skywee/wallet"
 import { useToast } from "@/hooks/use-toast"
 import { VOLUME_SERIES } from "@/lib/skywee/data"
@@ -321,6 +322,7 @@ export function RwaVaultModule() {
               : "Connect wallet to mint Casper-native tokens backed by a real-world asset."}
           </div>
         </div>
+        <MagneticWrapper strength={0.2} radius={5}>
         <button
           type="button"
           onClick={() => {
@@ -335,6 +337,7 @@ export function RwaVaultModule() {
           Fractionalize Asset
           <ArrowRight size={12} />
         </button>
+        </MagneticWrapper>
       </div>
 
       <ActionModal

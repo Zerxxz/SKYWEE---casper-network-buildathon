@@ -4,6 +4,7 @@ import * as React from "react"
 import { motion } from "framer-motion"
 import { ShieldCheck, AlertTriangle, ArrowRight, Activity, Zap } from "lucide-react"
 import { ActionModal, Field, inputCls, selectCls } from "../action-modal"
+import { MagneticWrapper } from "../magnetic-wrapper"
 import { useWallet } from "@/lib/skywee/wallet"
 import { useToast } from "@/hooks/use-toast"
 
@@ -218,13 +219,15 @@ export function AegisModule() {
             </div>
 
             {p.status === "active" && (
-              <button
-                type="button"
-                onClick={() => handleTrigger(p.id)}
-                className="mt-3 w-full px-3 py-2 skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] rounded-md text-[11px] font-mono uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
-              >
-                <Zap size={11} /> Simulate Trigger
-              </button>
+              <MagneticWrapper strength={0.15} radius={4} className="mt-3 block">
+                <button
+                  type="button"
+                  onClick={() => handleTrigger(p.id)}
+                  className="w-full px-3 py-2 skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] rounded-md text-[11px] font-mono uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Zap size={11} /> Simulate Trigger
+                </button>
+              </MagneticWrapper>
             )}
             {p.payoutEligible && (
               <div className="mt-3 px-3 py-2 rounded bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-between">
@@ -246,6 +249,7 @@ export function AegisModule() {
               : "Connect wallet to wrap a tokenized RWA in parametric insurance."}
           </div>
         </div>
+        <MagneticWrapper strength={0.2} radius={5}>
         <button
           type="button"
           onClick={() => {
@@ -260,6 +264,7 @@ export function AegisModule() {
           Issue Policy
           <ArrowRight size={12} />
         </button>
+        </MagneticWrapper>
       </div>
 
       <ActionModal

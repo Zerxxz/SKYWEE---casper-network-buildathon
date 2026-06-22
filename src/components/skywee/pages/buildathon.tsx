@@ -4,6 +4,7 @@ import { motion } from "framer-motion"
 import { Github, ArrowUpRight, Calendar, Trophy, FileText, Video } from "lucide-react"
 import { PageHeader } from "../page-header"
 import { ScrollReveal } from "../scroll-reveal"
+import { MagneticWrapper } from "../magnetic-wrapper"
 
 export function BuildathonPage() {
   return (
@@ -99,32 +100,38 @@ export function BuildathonPage() {
 
         {/* CTAs */}
         <div className="mt-8 flex flex-col sm:flex-row gap-3">
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90 transition-opacity"
-          >
-            <Github size={14} />
-            View on GitHub
-            <ArrowUpRight size={12} />
-          </a>
-          <a
-            href="#"
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 skywee-hairline bg-foreground/[0.03] rounded-md text-sm font-semibold hover:bg-foreground/[0.08] transition-colors"
-          >
-            <Video size={14} />
-            Watch Demo Video
-            <ArrowUpRight size={12} />
-          </a>
-          <a
-            href="#"
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 skywee-hairline bg-foreground/[0.03] rounded-md text-sm font-semibold hover:bg-foreground/[0.08] transition-colors"
-          >
-            <FileText size={14} />
-            Read Whitepaper
-            <ArrowUpRight size={12} />
-          </a>
+          <MagneticWrapper strength={0.2} radius={6}>
+            <a
+              href="https://github.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:opacity-90 transition-opacity"
+            >
+              <Github size={14} />
+              View on GitHub
+              <ArrowUpRight size={12} />
+            </a>
+          </MagneticWrapper>
+          <MagneticWrapper strength={0.15} radius={5}>
+            <a
+              href="#"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 skywee-hairline bg-foreground/[0.03] rounded-md text-sm font-semibold hover:bg-foreground/[0.08] transition-colors"
+            >
+              <Video size={14} />
+              Watch Demo Video
+              <ArrowUpRight size={12} />
+            </a>
+          </MagneticWrapper>
+          <MagneticWrapper strength={0.15} radius={5}>
+            <a
+              href="#"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 skywee-hairline bg-foreground/[0.03] rounded-md text-sm font-semibold hover:bg-foreground/[0.08] transition-colors"
+            >
+              <FileText size={14} />
+              Read Whitepaper
+              <ArrowUpRight size={12} />
+            </a>
+          </MagneticWrapper>
         </div>
       </motion.div>
 

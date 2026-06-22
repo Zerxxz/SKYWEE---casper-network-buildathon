@@ -4,6 +4,7 @@ import * as React from "react"
 import { motion } from "framer-motion"
 import { Users, ArrowRight, MessageSquare, Vote } from "lucide-react"
 import { ActionModal, Field, inputCls, selectCls } from "../action-modal"
+import { MagneticWrapper } from "../magnetic-wrapper"
 import { useWallet } from "@/lib/skywee/wallet"
 import { useToast } from "@/hooks/use-toast"
 
@@ -287,20 +288,24 @@ export function SwarmTreasuryModule() {
                       </div>
                       {publicKey && (
                         <div className="mt-3 flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleVote(p.id, true)}
-                            className="flex-1 px-2 py-1.5 skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] rounded text-[10px] font-mono uppercase tracking-wider flex items-center justify-center gap-1 transition-colors"
-                          >
-                            <Vote size={10} /> For
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleVote(p.id, false)}
-                            className="flex-1 px-2 py-1.5 skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] rounded text-[10px] font-mono uppercase tracking-wider transition-colors"
-                          >
-                            Against
-                          </button>
+                          <MagneticWrapper strength={0.15} radius={3} className="flex-1">
+                            <button
+                              type="button"
+                              onClick={() => handleVote(p.id, true)}
+                              className="w-full px-2 py-1.5 skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] rounded text-[10px] font-mono uppercase tracking-wider flex items-center justify-center gap-1 transition-colors"
+                            >
+                              <Vote size={10} /> For
+                            </button>
+                          </MagneticWrapper>
+                          <MagneticWrapper strength={0.15} radius={3} className="flex-1">
+                            <button
+                              type="button"
+                              onClick={() => handleVote(p.id, false)}
+                              className="w-full px-2 py-1.5 skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] rounded text-[10px] font-mono uppercase tracking-wider transition-colors"
+                            >
+                              Against
+                            </button>
+                          </MagneticWrapper>
                         </div>
                       )}
                     </>
@@ -321,6 +326,7 @@ export function SwarmTreasuryModule() {
               : "Connect wallet to submit an action to the agent swarm."}
           </div>
         </div>
+        <MagneticWrapper strength={0.2} radius={5}>
         <button
           type="button"
           onClick={() => {
@@ -335,6 +341,7 @@ export function SwarmTreasuryModule() {
           New Proposal
           <ArrowRight size={12} />
         </button>
+        </MagneticWrapper>
       </div>
 
       <ActionModal

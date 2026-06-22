@@ -4,6 +4,7 @@ import * as React from "react"
 import { motion } from "framer-motion"
 import { Leaf, ArrowRight, Satellite, AlertTriangle, Zap, Flame } from "lucide-react"
 import { ActionModal, Field, inputCls, selectCls } from "../action-modal"
+import { MagneticWrapper } from "../magnetic-wrapper"
 import { ScrollReveal } from "../scroll-reveal"
 import { useWallet } from "@/lib/skywee/wallet"
 import { useToast } from "@/hooks/use-toast"
@@ -257,30 +258,36 @@ export function CarbonGuardModule() {
 
               {/* Agent actions */}
               <div className="mt-3 pt-3 border-t border-border/60 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleVerify(p.id, true)}
-                  className="px-2 py-1.5 skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] rounded text-[10px] font-mono uppercase tracking-wider flex items-center justify-center gap-1 transition-colors"
-                >
-                  <Zap size={10} /> Verify
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleVerify(p.id, false)}
-                  className="px-2 py-1.5 skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] rounded text-[10px] font-mono uppercase tracking-wider flex items-center justify-center gap-1 transition-colors"
-                >
-                  <AlertTriangle size={10} /> Flag
-                </button>
+                <MagneticWrapper strength={0.15} radius={3}>
+                  <button
+                    type="button"
+                    onClick={() => handleVerify(p.id, true)}
+                    className="w-full px-2 py-1.5 skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] rounded text-[10px] font-mono uppercase tracking-wider flex items-center justify-center gap-1 transition-colors"
+                  >
+                    <Zap size={10} /> Verify
+                  </button>
+                </MagneticWrapper>
+                <MagneticWrapper strength={0.15} radius={3}>
+                  <button
+                    type="button"
+                    onClick={() => handleVerify(p.id, false)}
+                    className="w-full px-2 py-1.5 skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] rounded text-[10px] font-mono uppercase tracking-wider flex items-center justify-center gap-1 transition-colors"
+                  >
+                    <AlertTriangle size={10} /> Flag
+                  </button>
+                </MagneticWrapper>
               </div>
 
               {available > 0 && p.verification === "verified" && (
-                <button
-                  type="button"
-                  onClick={() => handleBurn(p.id)}
-                  className="mt-2 w-full px-3 py-2 bg-foreground/[0.04] hover:bg-foreground/[0.08] rounded text-[11px] font-mono uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Flame size={11} /> Retire {available.toLocaleString()} credits
-                </button>
+                <MagneticWrapper strength={0.15} radius={4} className="mt-2 block">
+                  <button
+                    type="button"
+                    onClick={() => handleBurn(p.id)}
+                    className="w-full px-3 py-2 bg-foreground/[0.04] hover:bg-foreground/[0.08] rounded text-[11px] font-mono uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Flame size={11} /> Retire {available.toLocaleString()} credits
+                  </button>
+                </MagneticWrapper>
               )}
 
               <div className="mt-2 text-[10px] text-muted-foreground/60 font-mono text-center">
@@ -316,6 +323,7 @@ export function CarbonGuardModule() {
               : "Connect wallet to tokenize credits and start autonomous verification."}
           </div>
         </div>
+        <MagneticWrapper strength={0.2} radius={5}>
         <button
           type="button"
           onClick={() => {
@@ -330,6 +338,7 @@ export function CarbonGuardModule() {
           Register Project
           <ArrowRight size={12} />
         </button>
+        </MagneticWrapper>
       </div>
 
       <ActionModal
