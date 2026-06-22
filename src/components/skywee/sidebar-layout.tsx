@@ -21,6 +21,7 @@ import { ThemeToggle } from "./theme-toggle"
 import { ConnectWalletButton } from "./connect-wallet-button"
 import { WalletStatus } from "./wallet-status"
 import { LiveBlockWidget } from "./live-block-widget"
+import { useMagnetic } from "@/lib/skywee/use-magnetic"
 import { MODULES } from "@/lib/skywee/data"
 
 export type PageId =
@@ -399,55 +400,15 @@ function SidebarContent({
             </div>
             <ul className="space-y-0.5">
               {items.map((item) => {
-                const Icon = item.icon
                 const isActive = active === item.id
                 return (
                   <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => onNavigate(item.id)}
-                      title={collapsed ? item.label : undefined}
-                      className={[
-                        "w-full flex items-center rounded-md text-sm transition-all relative group overflow-hidden",
-                        collapsed
-                          ? "justify-center px-0 py-2.5"
-                          : "gap-3 px-3 py-2",
-                        isActive
-                          ? "bg-primary text-primary-foreground font-medium"
-                          : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
-                      ].join(" ")}
-                    >
-                      <Icon size={15} className="flex-shrink-0" />
-                      {/* Label + description — fades out when collapsed */}
-                      <span
-                        className={[
-                          "flex-1 text-left truncate skywee-sidebar-text",
-                          collapsed ? "is-hidden w-0 overflow-hidden" : "",
-                        ].join(" ")}
-                      >
-                        {item.label}
-                      </span>
-                      {item.description && !isActive && (
-                        <span
-                          className={[
-                            "text-[10px] font-mono text-muted-foreground/50 hidden xl:inline skywee-sidebar-text",
-                            collapsed ? "is-hidden w-0 overflow-hidden" : "",
-                          ].join(" ")}
-                        >
-                          {item.description}
-                        </span>
-                      )}
-                      {isActive && !collapsed && (
-                        <motion.span
-                          layoutId="sidebar-active-indicator"
-                          className="absolute -left-3 top-1/2 -translate-y-1/2 h-5 w-0.5 bg-primary-foreground rounded-full"
-                        />
-                      )}
-                      {/* Active indicator dot when collapsed */}
-                      {isActive && collapsed && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-0.5 bg-primary-foreground rounded-r-full" />
-                      )}
-                    </button>
+                    <MagneticNavItem
+                      item={item}
+                      isActive={isActive}
+                      collapsed={collapsed}
+                      onNavigate={onNavigate}
+                    />
                   </li>
                 )
               })}
@@ -476,6 +437,80 @@ function SidebarContent({
         </div>
       )}
     </div>
+  )
+}
+
+/* =================== Magnetic Nav Item =================== */
+
+interface MagneticNavItemProps {
+  item: NavItem
+  isActive: boolean
+  collapsed: boolean
+  onNavigate: (id: PageId) => void
+}
+
+/**
+ * Sidebar nav button with magnetic hover effect.
+ * The button follows the cursor slightly when hovered, using spring physics.
+ * Disabled on touch devices, reduced motion, and when collapsed (icon-only mode
+ * doesn't benefit from magnetic since the target is too small).
+ */
+function MagneticNavItem({ item, isActive, collapsed, onNavigate }: MagneticNavItemProps) {
+  const Icon = item.icon
+  const ref = React.useRef<HTMLButtonElement>(null)
+  // Smaller radius when collapsed (icon-only) for subtler effect
+  const magnetic = useMagnetic(ref, { strength: 0.2, radius: collapsed ? 4 : 6 })
+
+  return (
+    <motion.button
+      ref={ref}
+      type="button"
+      onClick={() => onNavigate(item.id)}
+      title={collapsed ? item.label : undefined}
+      style={magnetic.style}
+      onMouseMove={magnetic.handlers.onMouseMove}
+      onMouseLeave={magnetic.handlers.onMouseLeave}
+      className={[
+        "w-full flex items-center rounded-md text-sm transition-colors relative group overflow-hidden",
+        collapsed
+          ? "justify-center px-0 py-2.5"
+          : "gap-3 px-3 py-2",
+        isActive
+          ? "bg-primary text-primary-foreground font-medium"
+          : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+      ].join(" ")}
+    >
+      <Icon size={15} className="flex-shrink-0" />
+      {/* Label + description — fades out when collapsed */}
+      <span
+        className={[
+          "flex-1 text-left truncate skywee-sidebar-text",
+          collapsed ? "is-hidden w-0 overflow-hidden" : "",
+        ].join(" ")}
+      >
+        {item.label}
+      </span>
+      {item.description && !isActive && (
+        <span
+          className={[
+            "text-[10px] font-mono text-muted-foreground/50 hidden xl:inline skywee-sidebar-text",
+            collapsed ? "is-hidden w-0 overflow-hidden" : "",
+          ].join(" ")}
+        >
+          {item.description}
+        </span>
+      )}
+      {isActive && !collapsed && (
+        <motion.span
+          layoutId="sidebar-active-indicator"
+          className="absolute -left-3 top-1/2 -translate-y-1/2 h-5 w-0.5 bg-primary-foreground rounded-full"
+        />
+      )}
+      {/* Active indicator dot when collapsed */}
+      {isActive && collapsed && (
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-0.5 bg-primary-foreground rounded-r-full" />
+      )}
+    </motion.button>
   )
 }
 
