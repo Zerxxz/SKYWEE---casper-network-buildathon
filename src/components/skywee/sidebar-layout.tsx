@@ -61,6 +61,10 @@ const GROUP_LABEL: Record<NavItem["group"], string> = {
 // Sidebar width constants
 const SIDEBAR_EXPANDED = 260
 const SIDEBAR_COLLAPSED = 68
+// Breakpoint at which sidebar auto-collapses (tablet). Below this, mobile drawer is used.
+// We use 1024px (lg) as the desktop threshold — tablet range is 768-1023px where sidebar
+// shows but auto-collapses to icon-only by default.
+const TABLET_BREAKPOINT = 1024
 
 interface SidebarLayoutProps {
   active: PageId
@@ -71,6 +75,7 @@ interface SidebarLayoutProps {
 export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutProps) {
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [collapsed, setCollapsed] = React.useState(false)
+  const [isTablet, setIsTablet] = React.useState(false)
   const activeItem = NAV.find((n) => n.id === active) ?? NAV[0]
 
   // Persist collapsed state to localStorage
@@ -85,17 +90,58 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
     }
   }, [])
 
+  // Auto-collapse on tablet breakpoint (768px - 1023px)
+  React.useEffect(() => {
+    const checkTablet = () => {
+      const width = window.innerWidth
+      const tablet = width >= 768 && width < TABLET_BREAKPOINT
+      setIsTablet(tablet)
+      // Auto-collapse when entering tablet range (only if user hasn't manually set a preference)
+      if (tablet) {
+        try {
+          const userPref = localStorage.getItem("skywee-sidebar-user-pref")
+          if (userPref === null) {
+            setCollapsed(true)
+          }
+        } catch {
+          setCollapsed(true)
+        }
+      }
+    }
+    checkTablet()
+    window.addEventListener("resize", checkTablet)
+    return () => window.removeEventListener("resize", checkTablet)
+  }, [])
+
   const toggleCollapsed = React.useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev
       try {
         localStorage.setItem("skywee-sidebar-collapsed", String(next))
+        // Mark that user has explicitly toggled — prevents auto-collapse from overriding
+        localStorage.setItem("skywee-sidebar-user-pref", String(next))
       } catch {
         // ignore
       }
       return next
     })
   }, [])
+
+  // Keyboard shortcut: Cmd/Ctrl+B to toggle sidebar
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+B (Mac) or Ctrl+B (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key === "b" && !e.shiftKey && !e.altKey) {
+        // Only on desktop/tablet where sidebar is visible (not mobile drawer)
+        if (window.innerWidth >= 768) {
+          e.preventDefault()
+          toggleCollapsed()
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [toggleCollapsed])
 
   const handleNavigate = (id: PageId) => {
     onNavigate(id)
@@ -121,12 +167,11 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
       </div>
       <div className="skywee-grain" aria-hidden />
 
-      {/* ====== SIDEBAR (desktop) — collapsible ====== */}
+      {/* ====== SIDEBAR (desktop + tablet) — collapsible ====== */}
       <aside
-        className="hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col border-r border-border bg-sidebar/80 backdrop-blur-xl overflow-hidden"
+        className="hidden md:flex fixed inset-y-0 left-0 z-40 flex-col border-r border-sidebar-border bg-sidebar overflow-hidden skywee-sidebar-aside"
         style={{
           width: sidebarWidth,
-          transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
         <SidebarContent
@@ -147,14 +192,14 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileOpen(false)}
-              className="lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+              className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
             />
             <motion.aside
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 40 }}
-              className="lg:hidden fixed inset-y-0 left-0 z-50 w-[280px] flex flex-col border-r border-border bg-sidebar"
+              className="md:hidden fixed inset-y-0 left-0 z-50 w-[280px] flex flex-col border-r border-sidebar-border bg-sidebar"
             >
               <SidebarContent
                 groupedNav={groupedNav}
@@ -183,19 +228,19 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="lg:hidden p-2 -ml-2 rounded-md hover:bg-foreground/5"
+                className="md:hidden p-2 -ml-2 rounded-md hover:bg-foreground/5"
                 aria-label="Open menu"
               >
                 <Menu size={18} />
               </button>
 
-              {/* Desktop: collapse toggle */}
+              {/* Desktop/tablet: collapse toggle */}
               <button
                 type="button"
                 onClick={toggleCollapsed}
-                className="hidden lg:flex p-2 -ml-2 rounded-md hover:bg-foreground/5 transition-colors"
+                className="hidden md:flex p-2 -ml-2 rounded-md hover:bg-foreground/5 transition-colors"
                 aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                title={collapsed ? "Expand sidebar (⌘B)" : "Collapse sidebar (⌘B)"}
               >
                 {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
               </button>
@@ -301,7 +346,7 @@ function SidebarContent({
   return (
     <div className="flex flex-col h-full">
       {/* Brand */}
-      <div className={["h-16 flex items-center border-b border-border", collapsed ? "justify-center px-2" : "justify-between px-5"].join(" ")}>
+      <div className={["h-16 flex items-center border-b border-sidebar-border", collapsed ? "justify-center px-2" : "justify-between px-5"].join(" ")}>
         <a
           href="#"
           onClick={(e) => {
@@ -317,17 +362,20 @@ function SidebarContent({
           >
             S
           </div>
-          {!collapsed && (
-            <span className="font-mono text-sm font-bold tracking-[0.18em] whitespace-nowrap">
-              SKYWEE
-            </span>
-          )}
+          <span
+            className={[
+              "font-mono text-sm font-bold tracking-[0.18em] whitespace-nowrap skywee-sidebar-text",
+              collapsed ? "is-hidden w-0 overflow-hidden" : "",
+            ].join(" ")}
+          >
+            SKYWEE
+          </span>
         </a>
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="lg:hidden p-1.5 rounded-md hover:bg-foreground/5"
+            className="md:hidden p-1.5 rounded-md hover:bg-foreground/5"
             aria-label="Close menu"
           >
             <X size={16} />
@@ -339,18 +387,24 @@ function SidebarContent({
       <nav className={["flex-1 overflow-y-auto skywee-sidebar-scroll py-4", collapsed ? "px-2" : "px-3"].join(" ")}>
         {groupedNav.map(({ group, items }) => (
           <div key={group} className={collapsed ? "mb-4" : "mb-6"}>
-            {/* Group label — hidden when collapsed */}
-            {!collapsed && (
-              <div className="px-3 mb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground/60">
-                {GROUP_LABEL[group as NavItem["group"]]}
-              </div>
-            )}
-            {/* Separator dot when collapsed */}
-            {collapsed && (
-              <div className="flex justify-center mb-2">
-                <div className="h-1 w-1 rounded-full bg-foreground/20" />
-              </div>
-            )}
+            {/* Group label — fades out when collapsed */}
+            <div
+              className={[
+                "px-3 mb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground/60 skywee-sidebar-text",
+                collapsed ? "is-hidden h-0 overflow-hidden mb-0" : "",
+              ].join(" ")}
+            >
+              {GROUP_LABEL[group as NavItem["group"]]}
+            </div>
+            {/* Separator dot — fades in when collapsed */}
+            <div
+              className={[
+                "flex justify-center mb-2 skywee-sidebar-text",
+                collapsed ? "" : "is-hidden h-0 overflow-hidden mb-0",
+              ].join(" ")}
+            >
+              <div className="h-1 w-1 rounded-full bg-foreground/20" />
+            </div>
             <ul className="space-y-0.5">
               {items.map((item) => {
                 const Icon = item.icon
@@ -362,7 +416,7 @@ function SidebarContent({
                       onClick={() => onNavigate(item.id)}
                       title={collapsed ? item.label : undefined}
                       className={[
-                        "w-full flex items-center rounded-md text-sm transition-all relative group",
+                        "w-full flex items-center rounded-md text-sm transition-all relative group overflow-hidden",
                         collapsed
                           ? "justify-center px-0 py-2.5"
                           : "gap-3 px-3 py-2",
@@ -372,15 +426,24 @@ function SidebarContent({
                       ].join(" ")}
                     >
                       <Icon size={15} className="flex-shrink-0" />
-                      {!collapsed && (
-                        <>
-                          <span className="flex-1 text-left truncate">{item.label}</span>
-                          {item.description && !isActive && (
-                            <span className="text-[10px] font-mono text-muted-foreground/50 hidden xl:inline">
-                              {item.description}
-                            </span>
-                          )}
-                        </>
+                      {/* Label + description — fades out when collapsed */}
+                      <span
+                        className={[
+                          "flex-1 text-left truncate skywee-sidebar-text",
+                          collapsed ? "is-hidden w-0 overflow-hidden" : "",
+                        ].join(" ")}
+                      >
+                        {item.label}
+                      </span>
+                      {item.description && !isActive && (
+                        <span
+                          className={[
+                            "text-[10px] font-mono text-muted-foreground/50 hidden xl:inline skywee-sidebar-text",
+                            collapsed ? "is-hidden w-0 overflow-hidden" : "",
+                          ].join(" ")}
+                        >
+                          {item.description}
+                        </span>
                       )}
                       {isActive && !collapsed && (
                         <motion.span
@@ -401,14 +464,21 @@ function SidebarContent({
         ))}
       </nav>
 
-      {/* Bottom: wallet + live status */}
+      {/* Bottom: wallet + live status + shortcut hint */}
       {!collapsed ? (
-        <div className="border-t border-border p-3 space-y-2">
+        <div className="border-t border-sidebar-border p-3 space-y-2">
           <WalletStatus />
           <LiveBlockWidget />
+          {/* Keyboard shortcut hint */}
+          <div className="flex items-center justify-between px-2 pt-1">
+            <span className="text-[9px] font-mono text-muted-foreground/50 uppercase tracking-wider">
+              Toggle
+            </span>
+            <span className="skywee-kbd">⌘B</span>
+          </div>
         </div>
       ) : (
-        <div className="border-t border-border p-2 flex flex-col items-center gap-2">
+        <div className="border-t border-sidebar-border p-2 flex flex-col items-center gap-2">
           <WalletStatus compact />
           <LiveBlockWidget compact />
         </div>
