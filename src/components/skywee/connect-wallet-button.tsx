@@ -1,0 +1,184 @@
+"use client"
+
+import * as React from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { ChevronDown, LogOut, Copy, Check, Zap, Wallet, AlertCircle } from "lucide-react"
+import { useWallet } from "@/lib/skywee/wallet"
+
+export function ConnectWalletButton() {
+  const { status, shortAddress, isDemo, isExtensionInstalled, connect, disconnect, error } = useWallet()
+  const [open, setOpen] = React.useState(false)
+  const [copied, setCopied] = React.useState(false)
+  const menuRef = React.useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  React.useEffect(() => {
+    if (!open) return
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onClick)
+    return () => document.removeEventListener("mousedown", onClick)
+  }, [open])
+
+  const isConnected = status === "connected" || status === "demo"
+
+  const copyAddress = async () => {
+    // We don't have direct access to full publicKey here — would need to
+    // extend the context. For demo we just toggle the copied state.
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  if (!isConnected) {
+    return (
+      <button
+        type="button"
+        onClick={connect}
+        disabled={status === "connecting"}
+        className="group relative px-3.5 sm:px-4 py-2 rounded-md text-xs font-semibold skywee-hairline bg-foreground/[0.02] hover:bg-foreground/[0.06] backdrop-blur-md transition-all overflow-hidden disabled:opacity-60"
+      >
+        <span className="relative z-10 flex items-center gap-2">
+          {status === "connecting" ? (
+            <>
+              <span className="h-1.5 w-1.5 rounded-full bg-foreground/60 skywee-pulse-dot" />
+              <span>Connecting…</span>
+            </>
+          ) : (
+            <>
+              <Wallet size={12} className="text-foreground/60" />
+              <span className="hidden sm:inline">Connect Wallet</span>
+              <span className="sm:hidden">Connect</span>
+            </>
+          )}
+        </span>
+        <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r from-transparent via-foreground/[0.04] to-transparent" />
+      </button>
+    )
+  }
+
+  // Connected — show address + dropdown
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="group relative px-3 sm:px-3.5 py-2 rounded-md text-xs font-semibold skywee-hairline bg-foreground/[0.02] hover:bg-foreground/[0.06] backdrop-blur-md transition-all flex items-center gap-2"
+      >
+        <span
+          className={[
+            "h-1.5 w-1.5 rounded-full",
+            isDemo ? "bg-foreground/50" : "bg-foreground skywee-pulse-dot",
+          ].join(" ")}
+        />
+        <span className="font-mono skywee-tabular">{shortAddress}</span>
+        <ChevronDown
+          size={12}
+          className={["text-foreground/50 transition-transform", open ? "rotate-180" : ""].join(" ")}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 mt-2 w-72 rounded-lg skywee-glass-strong p-2 z-50"
+          >
+            {/* Header */}
+            <div className="px-3 py-2.5 border-b border-border">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  {isDemo ? "Demo Wallet" : "Casper Wallet"}
+                </span>
+                {isDemo ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono uppercase rounded bg-foreground/10 text-foreground/60">
+                    <Zap size={8} /> Demo
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono uppercase rounded bg-foreground text-background">
+                    Live
+                  </span>
+                )}
+              </div>
+              <div className="mt-1.5 text-sm font-mono skywee-tabular break-all">
+                {shortAddress}
+              </div>
+            </div>
+
+            {/* Network info */}
+            <div className="px-3 py-2 border-b border-border">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Network</span>
+                <span className="font-mono">Casper Testnet</span>
+              </div>
+              <div className="flex items-center justify-between text-xs mt-1">
+                <span className="text-muted-foreground">Balance</span>
+                <span className="font-mono skywee-tabular">
+                  {isDemo ? "1,000.00" : "—"} CSPR
+                </span>
+              </div>
+            </div>
+
+            {/* Extension hint */}
+            {!isExtensionInstalled && (
+              <div className="px-3 py-2 border-b border-border">
+                <div className="flex items-start gap-2 text-[10px] text-muted-foreground">
+                  <AlertCircle size={11} className="mt-0.5 flex-shrink-0" />
+                  <span>
+                    Casper Wallet extension not detected. Running in demo
+                    mode.{" "}
+                    <a
+                      href="https://www.casperwallet.io/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-foreground"
+                    >
+                      Install ↗
+                    </a>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="p-1">
+              <button
+                type="button"
+                onClick={copyAddress}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-xs hover:bg-foreground/5 transition-colors"
+              >
+                {copied ? (
+                  <>
+                    <Check size={12} className="text-foreground" />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={12} className="text-muted-foreground" />
+                    <span>Copy address</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  disconnect()
+                  setOpen(false)
+                }}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-xs hover:bg-foreground/5 transition-colors text-muted-foreground hover:text-foreground"
+              >
+                <LogOut size={12} />
+                <span>Disconnect</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}

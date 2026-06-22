@@ -16,6 +16,8 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { ThemeToggle } from "./theme-toggle"
+import { ConnectWalletButton } from "./connect-wallet-button"
+import { WalletStatus } from "./wallet-status"
 import { MODULES } from "@/lib/skywee/data"
 
 export type PageId =
@@ -163,19 +165,8 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
 
               <ThemeToggle />
 
-              {/* Connect wallet — MORE TRANSPARENT */}
-              <button
-                type="button"
-                className="group relative px-3.5 sm:px-4 py-2 rounded-md text-xs font-semibold skywee-hairline bg-foreground/[0.02] hover:bg-foreground/[0.06] backdrop-blur-md transition-all overflow-hidden"
-              >
-                <span className="relative z-10 flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-foreground/40 group-hover:bg-foreground/70 transition-colors" />
-                  <span className="hidden sm:inline">Connect Wallet</span>
-                  <span className="sm:hidden">Connect</span>
-                </span>
-                {/* Subtle hover sheen */}
-                <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r from-transparent via-foreground/[0.04] to-transparent" />
-              </button>
+              {/* Real Casper Wallet button */}
+              <ConnectWalletButton />
             </div>
           </div>
         </header>
@@ -317,8 +308,9 @@ function SidebarContent({ groupedNav, active, onNavigate, onClose }: SidebarCont
         ))}
       </nav>
 
-      {/* Bottom: live status */}
-      <div className="border-t border-border p-3">
+      {/* Bottom: wallet + live status */}
+      <div className="border-t border-border p-3 space-y-2">
+        <WalletStatus />
         <div className="rounded-lg skywee-hairline bg-foreground/[0.02] p-3">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">

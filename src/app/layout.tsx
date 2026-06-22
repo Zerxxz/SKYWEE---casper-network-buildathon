@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/skywee/theme-provider";
+import { WalletProvider } from "@/lib/skywee/wallet";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -61,8 +62,10 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
-          {children}
-          <Toaster />
+          <WalletProvider>
+            {children}
+            <Toaster />
+          </WalletProvider>
         </ThemeProvider>
       </body>
     </html>

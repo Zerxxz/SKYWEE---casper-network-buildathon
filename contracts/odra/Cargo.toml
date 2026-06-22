@@ -1,0 +1,25 @@
+[package]
+name = "skywee_contracts"
+version = "0.1.0"
+edition = "2021"
+description = "SKYWEE — Agentic Web3 OS smart contracts for Casper Network"
+authors = ["SKYWEE Team"]
+
+[dependencies]
+odra = { version = "1.0.0", features = ["casper"] }
+odra-casper = "1.0.0"
+casper-types = "3.0.0"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "deploy_skywee"
+path = "bin/deploy.rs"
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+panic = "abort"
