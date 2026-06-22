@@ -13,6 +13,8 @@ import {
   Trophy,
   Menu,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
   type LucideIcon,
 } from "lucide-react"
 import { ThemeToggle } from "./theme-toggle"
@@ -56,6 +58,10 @@ const GROUP_LABEL: Record<NavItem["group"], string> = {
   meta: "Resources",
 }
 
+// Sidebar width constants
+const SIDEBAR_EXPANDED = 260
+const SIDEBAR_COLLAPSED = 68
+
 interface SidebarLayoutProps {
   active: PageId
   onNavigate: (id: PageId) => void
@@ -64,7 +70,32 @@ interface SidebarLayoutProps {
 
 export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutProps) {
   const [mobileOpen, setMobileOpen] = React.useState(false)
+  const [collapsed, setCollapsed] = React.useState(false)
   const activeItem = NAV.find((n) => n.id === active) ?? NAV[0]
+
+  // Persist collapsed state to localStorage
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem("skywee-sidebar-collapsed")
+      if (stored !== null) {
+        setCollapsed(stored === "true")
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const toggleCollapsed = React.useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem("skywee-sidebar-collapsed", String(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }, [])
 
   const handleNavigate = (id: PageId) => {
     onNavigate(id)
@@ -78,6 +109,9 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
     items: NAV.filter((n) => n.group === g),
   }))
 
+  // Dynamic padding for main content based on sidebar state
+  const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED
+
   return (
     <div className="relative min-h-screen flex bg-background">
       {/* ====== GLOBAL SKYWEE WATERMARK ====== */}
@@ -87,14 +121,20 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
       </div>
       <div className="skywee-grain" aria-hidden />
 
-      {/* ====== SIDEBAR (desktop) ====== */}
+      {/* ====== SIDEBAR (desktop) — collapsible ====== */}
       <aside
-        className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-[260px] flex-col border-r border-border bg-sidebar/80 backdrop-blur-xl"
+        className="hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col border-r border-border bg-sidebar/80 backdrop-blur-xl overflow-hidden"
+        style={{
+          width: sidebarWidth,
+          transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
       >
         <SidebarContent
           groupedNav={groupedNav}
           active={active}
           onNavigate={handleNavigate}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapsed}
         />
       </aside>
 
@@ -128,12 +168,18 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
       </AnimatePresence>
 
       {/* ====== MAIN CONTENT ====== */}
-      <div className="flex-1 lg:pl-[260px] relative z-10 flex flex-col min-w-0">
+      <div
+        className="flex-1 relative z-10 flex flex-col min-w-0 skywee-main-shift"
+        style={{
+          "--skywee-sidebar-width": `${sidebarWidth}px`,
+        } as React.CSSProperties}
+      >
         {/* Top bar */}
         <header className="sticky top-0 z-30 border-b border-border bg-background/60 backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6">
-            {/* Left: mobile menu + breadcrumb */}
+            {/* Left: mobile menu + desktop collapse toggle + breadcrumb */}
             <div className="flex items-center gap-3 min-w-0">
+              {/* Mobile: open drawer */}
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
@@ -142,6 +188,18 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
               >
                 <Menu size={18} />
               </button>
+
+              {/* Desktop: collapse toggle */}
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                className="hidden lg:flex p-2 -ml-2 rounded-md hover:bg-foreground/5 transition-colors"
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              >
+                {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+              </button>
+
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground hidden sm:inline">
                   SKYWEE
@@ -228,20 +286,30 @@ interface SidebarContentProps {
   active: PageId
   onNavigate: (id: PageId) => void
   onClose?: () => void
+  collapsed?: boolean
+  onToggleCollapse?: () => void
 }
 
-function SidebarContent({ groupedNav, active, onNavigate, onClose }: SidebarContentProps) {
+function SidebarContent({
+  groupedNav,
+  active,
+  onNavigate,
+  onClose,
+  collapsed = false,
+  onToggleCollapse,
+}: SidebarContentProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Brand */}
-      <div className="h-16 flex items-center justify-between px-5 border-b border-border">
+      <div className={["h-16 flex items-center border-b border-border", collapsed ? "justify-center px-2" : "justify-between px-5"].join(" ")}>
         <a
           href="#"
           onClick={(e) => {
             e.preventDefault()
             onNavigate("dashboard")
           }}
-          className="flex items-center gap-2.5 group"
+          className="flex items-center gap-2.5 group flex-shrink-0"
+          title={collapsed ? "SKYWEE" : undefined}
         >
           <div
             aria-hidden
@@ -249,9 +317,11 @@ function SidebarContent({ groupedNav, active, onNavigate, onClose }: SidebarCont
           >
             S
           </div>
-          <span className="font-mono text-sm font-bold tracking-[0.18em]">
-            SKYWEE
-          </span>
+          {!collapsed && (
+            <span className="font-mono text-sm font-bold tracking-[0.18em] whitespace-nowrap">
+              SKYWEE
+            </span>
+          )}
         </a>
         {onClose && (
           <button
@@ -266,12 +336,21 @@ function SidebarContent({ groupedNav, active, onNavigate, onClose }: SidebarCont
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto skywee-sidebar-scroll px-3 py-4">
+      <nav className={["flex-1 overflow-y-auto skywee-sidebar-scroll py-4", collapsed ? "px-2" : "px-3"].join(" ")}>
         {groupedNav.map(({ group, items }) => (
-          <div key={group} className="mb-6">
-            <div className="px-3 mb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground/60">
-              {GROUP_LABEL[group as NavItem["group"]]}
-            </div>
+          <div key={group} className={collapsed ? "mb-4" : "mb-6"}>
+            {/* Group label — hidden when collapsed */}
+            {!collapsed && (
+              <div className="px-3 mb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground/60">
+                {GROUP_LABEL[group as NavItem["group"]]}
+              </div>
+            )}
+            {/* Separator dot when collapsed */}
+            {collapsed && (
+              <div className="flex justify-center mb-2">
+                <div className="h-1 w-1 rounded-full bg-foreground/20" />
+              </div>
+            )}
             <ul className="space-y-0.5">
               {items.map((item) => {
                 const Icon = item.icon
@@ -281,25 +360,37 @@ function SidebarContent({ groupedNav, active, onNavigate, onClose }: SidebarCont
                     <button
                       type="button"
                       onClick={() => onNavigate(item.id)}
+                      title={collapsed ? item.label : undefined}
                       className={[
-                        "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all relative group",
+                        "w-full flex items-center rounded-md text-sm transition-all relative group",
+                        collapsed
+                          ? "justify-center px-0 py-2.5"
+                          : "gap-3 px-3 py-2",
                         isActive
                           ? "bg-primary text-primary-foreground font-medium"
                           : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
                       ].join(" ")}
                     >
                       <Icon size={15} className="flex-shrink-0" />
-                      <span className="flex-1 text-left truncate">{item.label}</span>
-                      {item.description && !isActive && (
-                        <span className="text-[10px] font-mono text-muted-foreground/50 hidden xl:inline">
-                          {item.description}
-                        </span>
+                      {!collapsed && (
+                        <>
+                          <span className="flex-1 text-left truncate">{item.label}</span>
+                          {item.description && !isActive && (
+                            <span className="text-[10px] font-mono text-muted-foreground/50 hidden xl:inline">
+                              {item.description}
+                            </span>
+                          )}
+                        </>
                       )}
-                      {isActive && (
+                      {isActive && !collapsed && (
                         <motion.span
                           layoutId="sidebar-active-indicator"
                           className="absolute -left-3 top-1/2 -translate-y-1/2 h-5 w-0.5 bg-primary-foreground rounded-full"
                         />
+                      )}
+                      {/* Active indicator dot when collapsed */}
+                      {isActive && collapsed && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-0.5 bg-primary-foreground rounded-r-full" />
                       )}
                     </button>
                   </li>
@@ -311,10 +402,17 @@ function SidebarContent({ groupedNav, active, onNavigate, onClose }: SidebarCont
       </nav>
 
       {/* Bottom: wallet + live status */}
-      <div className="border-t border-border p-3 space-y-2">
-        <WalletStatus />
-        <LiveBlockWidget />
-      </div>
+      {!collapsed ? (
+        <div className="border-t border-border p-3 space-y-2">
+          <WalletStatus />
+          <LiveBlockWidget />
+        </div>
+      ) : (
+        <div className="border-t border-border p-2 flex flex-col items-center gap-2">
+          <WalletStatus compact />
+          <LiveBlockWidget compact />
+        </div>
+      )}
     </div>
   )
 }

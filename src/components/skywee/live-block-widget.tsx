@@ -4,13 +4,39 @@ import { Boxes, ExternalLink } from "lucide-react"
 import { useNetworkStatus } from "@/lib/skywee/use-network"
 import { EXPLORER } from "@/lib/skywee/cspr-cloud"
 
-export function LiveBlockWidget() {
+interface LiveBlockWidgetProps {
+  /** Compact mode: icon-only, for collapsed sidebar */
+  compact?: boolean
+}
+
+export function LiveBlockWidget({ compact = false }: LiveBlockWidgetProps) {
   const { status, loading } = useNetworkStatus(10_000)
 
   const blockHeight = status?.blockHeight ?? 2_847_195
   const eraId = status?.eraId
   const hasRealData = status?.hasRealData ?? false
   const network = status?.network ?? "testnet"
+
+  if (compact) {
+    // Compact: just an icon with tooltip + live dot
+    return (
+      <a
+        href={EXPLORER.block(blockHeight)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="h-8 w-8 rounded-md skywee-hairline bg-foreground/[0.02] hover:bg-foreground/[0.06] grid place-items-center transition-colors relative"
+        title={`Block #${blockHeight.toLocaleString()} · ${network} · ${hasRealData ? "Live" : "Cached"}`}
+      >
+        <Boxes size={13} className="text-muted-foreground" />
+        <span
+          className={[
+            "absolute top-1 right-1 h-1.5 w-1.5 rounded-full",
+            loading ? "bg-muted-foreground/40" : "bg-foreground skywee-pulse-dot",
+          ].join(" ")}
+        />
+      </a>
+    )
+  }
 
   return (
     <div className="rounded-lg skywee-hairline bg-foreground/[0.02] p-3">

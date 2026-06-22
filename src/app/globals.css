@@ -320,3 +320,16 @@
 .skywee-sidebar-scroll::-webkit-scrollbar {
   width: 4px;
 }
+
+/* Collapsible sidebar — main content padding driven by CSS variable */
+/* Default: no padding (mobile) */
+.skywee-main-shift {
+  padding-left: 0;
+  transition: padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* Desktop: padding equals sidebar width (set via --skywee-sidebar-width) */
+@media (min-width: 1024px) {
+  .skywee-main-shift {
+    padding-left: var(--skywee-sidebar-width, 260px);
+  }
+}
