@@ -240,6 +240,25 @@
   text-align: right;
 }
 
+/* Center watermark — large, very subtle, centered in background */
+.skywee-global-watermark-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-weight: 900;
+  font-size: clamp(8rem, 28vw, 22rem);
+  letter-spacing: -0.08em;
+  line-height: 0.85;
+  color: var(--skywee-bg-watermark);
+  white-space: nowrap;
+  user-select: none;
+  opacity: 0.5;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* Subtle grain texture — global, fixed */
 .skywee-grain {
   position: fixed;
@@ -479,6 +498,19 @@
   height: 28px;
   border: 1.5px solid var(--foreground);
   mix-blend-mode: difference;
+}
+
+/* Cursor trail dots — comet-like trailing effect */
+.skywee-cursor-trail-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 9998;
+  border-radius: 50%;
+  background: var(--foreground);
+  mix-blend-mode: difference;
+  translate: -50% -50%;
 }
 
 /* Hide native cursor on desktop (cursor is replaced) */

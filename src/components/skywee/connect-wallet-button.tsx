@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { ChevronDown, LogOut, Copy, Check, Zap, Wallet, AlertCircle, ExternalLink, Loader2 } from "lucide-react"
 import { useWallet } from "@/lib/skywee/wallet"
 import { useAccountInfo } from "@/lib/skywee/use-network"
+import { MagneticWrapper } from "./magnetic-wrapper"
 
 export function ConnectWalletButton() {
   const { status, publicKey, shortAddress, isDemo, isExtensionInstalled, connect, disconnect } = useWallet()
@@ -42,28 +43,30 @@ export function ConnectWalletButton() {
 
   if (!isConnected) {
     return (
-      <button
-        type="button"
-        onClick={connect}
-        disabled={status === "connecting"}
-        className="group relative px-3.5 sm:px-4 py-2 rounded-md text-xs font-semibold skywee-hairline bg-foreground/[0.02] hover:bg-foreground/[0.06] backdrop-blur-md transition-all overflow-hidden disabled:opacity-60"
-      >
-        <span className="relative z-10 flex items-center gap-2">
-          {status === "connecting" ? (
-            <>
-              <span className="h-1.5 w-1.5 rounded-full bg-foreground/60 skywee-pulse-dot" />
-              <span>Connecting…</span>
-            </>
-          ) : (
-            <>
-              <Wallet size={12} className="text-foreground/60" />
-              <span className="hidden sm:inline">Connect Wallet</span>
-              <span className="sm:hidden">Connect</span>
-            </>
-          )}
-        </span>
-        <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r from-transparent via-foreground/[0.04] to-transparent" />
-      </button>
+      <MagneticWrapper strength={0.2} radius={5}>
+        <button
+          type="button"
+          onClick={connect}
+          disabled={status === "connecting"}
+          className="group relative px-3.5 sm:px-4 py-2 rounded-md text-xs font-semibold skywee-hairline bg-foreground/[0.02] hover:bg-foreground/[0.06] backdrop-blur-md transition-all overflow-hidden disabled:opacity-60"
+        >
+          <span className="relative z-10 flex items-center gap-2">
+            {status === "connecting" ? (
+              <>
+                <span className="h-1.5 w-1.5 rounded-full bg-foreground/60 skywee-pulse-dot" />
+                <span>Connecting…</span>
+              </>
+            ) : (
+              <>
+                <Wallet size={12} className="text-foreground/60" />
+                <span className="hidden sm:inline">Connect Wallet</span>
+                <span className="sm:hidden">Connect</span>
+              </>
+            )}
+          </span>
+          <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r from-transparent via-foreground/[0.04] to-transparent" />
+        </button>
+      </MagneticWrapper>
     )
   }
 
@@ -77,10 +80,11 @@ export function ConnectWalletButton() {
 
   return (
     <div className="relative" ref={menuRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="group relative px-3 sm:px-3.5 py-2 rounded-md text-xs font-semibold skywee-hairline bg-foreground/[0.02] hover:bg-foreground/[0.06] backdrop-blur-md transition-all flex items-center gap-2"
+      <MagneticWrapper strength={0.15} radius={4}>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="group relative px-3 sm:px-3.5 py-2 rounded-md text-xs font-semibold skywee-hairline bg-foreground/[0.02] hover:bg-foreground/[0.06] backdrop-blur-md transition-all flex items-center gap-2"
       >
         <span
           className={[
@@ -94,6 +98,7 @@ export function ConnectWalletButton() {
           className={["text-foreground/50 transition-transform", open ? "rotate-180" : ""].join(" ")}
         />
       </button>
+      </MagneticWrapper>
 
       <AnimatePresence>
         {open && (

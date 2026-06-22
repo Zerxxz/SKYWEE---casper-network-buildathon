@@ -22,6 +22,7 @@ import { ConnectWalletButton } from "./connect-wallet-button"
 import { WalletStatus } from "./wallet-status"
 import { LiveBlockWidget } from "./live-block-widget"
 import { CustomCursor } from "./custom-cursor"
+import { CursorTrail } from "./cursor-trail"
 import { useMagnetic } from "@/lib/skywee/use-magnetic"
 import { MODULES } from "@/lib/skywee/data"
 
@@ -164,6 +165,7 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
     <div className="relative min-h-screen flex bg-background">
       {/* ====== CUSTOM CURSOR (desktop only) ====== */}
       <CustomCursor />
+      <CursorTrail count={6} />
 
       {/* ====== GLOBAL SKYWEE WATERMARK (parallax on mouse move) ====== */}
       <ParallaxWatermark />
@@ -477,6 +479,16 @@ function ParallaxWatermark() {
 
   return (
     <div className="skywee-global-watermark" aria-hidden>
+      {/* Center watermark — large, subtle, centered in background */}
+      <div
+        className="skywee-watermark-parallax"
+        style={{
+          transform: enabled ? `translate(${offset.x * 0.5}px, ${offset.y * 0.5}px)` : undefined,
+        }}
+      >
+        <span className="skywee-global-watermark-center">SKYWEE</span>
+      </div>
+      {/* Corner watermark — small, elegant, bottom-right */}
       <div
         className="skywee-watermark-parallax"
         style={{

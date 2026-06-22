@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import { Bot, ArrowRight, Zap } from "lucide-react"
 import { ActionModal, Field, inputCls, selectCls } from "../action-modal"
 import { McpDiscoveryPanel } from "../mcp-discovery-panel"
+import { MagneticWrapper } from "../magnetic-wrapper"
 import { SkeletonTableRow } from "../skeleton"
 import { ScrollReveal } from "../scroll-reveal"
 import { useWallet } from "@/lib/skywee/wallet"
@@ -335,6 +336,7 @@ export function AgentSquareModule() {
               : "Connect wallet to register an autonomous capability on Casper Testnet."}
           </div>
         </div>
+        <MagneticWrapper strength={0.2} radius={5}>
         <button
           type="button"
           onClick={() => {
@@ -349,6 +351,7 @@ export function AgentSquareModule() {
           Deploy Agent
           <ArrowRight size={12} />
         </button>
+        </MagneticWrapper>
       </div>
 
       <ActionModal
