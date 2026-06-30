@@ -1,34 +1,26 @@
-//! SwarmTreasury — Multi-Agent DAO Execution Contract
-//!
-//! Specialized agents (Yield, Risk, Compliance, Treasurer, Executor)
-//! deliberate on treasury actions. Small actions auto-execute via 2-of-3
-//! consensus; large actions become governance proposals with full
-//! deliberation trail stored on-chain.
+//! SwarmTreasury — Multi-Agent DAO Execution Contract (Odra 2.x)
 
 use odra::prelude::*;
+use odra::casper_types::U512;
 use crate::shared::{ModuleId, MIN_CONSENSUS_REPUTATION};
 
-#[odra::module_state]
-pub struct TreasuryState {
-    /// Owner (governance).
-    pub owner: Variable<Address>,
-    /// Treasury balance (CSPR + tokens).
-    pub balance: Variable<U512>,
-    /// Proposal counter — next proposal ID.
-    pub proposal_count: u32,
-    /// Proposal ID → Proposal.
-    pub proposals: Mapping<u32, Proposal>,
-    /// Deliberation log entry counter.
-    pub log_count: u32,
-    /// Log entry ID → DeliberationEntry.
-    pub deliberation_log: Mapping<u32, DeliberationEntry>,
-    /// Authorized agent addresses (the swarm).
-    pub swarm_agents: Mapping<Address, SwarmAgent>,
-    /// Auto-execute threshold: actions <= this amount auto-execute on 2-of-3.
-    pub auto_execute_threshold: Variable<U512>,
+#[odra::odra_type]
+pub enum ProposalStatus {
+    Voting,
+    Executed,
+    Rejected,
 }
 
-#[derive(OdraType, Clone)]
+#[odra::odra_type]
+pub enum SwarmRole {
+    YieldRouter,
+    RiskScorer,
+    Compliance,
+    Treasurer,
+    Executor,
+}
+
+#[odra::odra_type]
 pub struct Proposal {
     pub id: u32,
     pub title: String,
@@ -39,28 +31,11 @@ pub struct Proposal {
     pub votes_for: U512,
     pub votes_against: U512,
     pub deliberation_rounds: u32,
-    pub voters: Mapping<Address, bool>,
     pub created_block: u64,
     pub executed_block: Option<u64>,
 }
 
-#[derive(OdraType, PartialEq, Eq, Clone, Copy)]
-pub enum ProposalStatus {
-    Voting,
-    Executed,
-    Rejected,
-}
-
-#[derive(OdraType, PartialEq, Eq, Clone, Copy)]
-pub enum SwarmRole {
-    YieldRouter,
-    RiskScorer,
-    Compliance,
-    Treasurer,
-    Executor,
-}
-
-#[derive(OdraType, Clone)]
+#[odra::odra_type]
 pub struct SwarmAgent {
     pub addr: Address,
     pub role: SwarmRole,
@@ -68,7 +43,7 @@ pub struct SwarmAgent {
     pub active: bool,
 }
 
-#[derive(OdraType, Clone)]
+#[odra::odra_type]
 pub struct DeliberationEntry {
     pub id: u32,
     pub proposal_id: u32,
@@ -79,21 +54,43 @@ pub struct DeliberationEntry {
     pub block: u64,
 }
 
-#[derive(OdraEvent)]
-pub enum TreasuryEvent {
-    SwarmAgentAdded { addr: Address, role: SwarmRole },
-    ProposalCreated { id: u32, title: String, amount: U512, proposer: Address },
-    DeliberationLogged { proposal_id: u32, agent: Address, round: u32 },
-    VoteCast { proposal_id: u32, voter: Address, support: bool, weight: U512 },
-    ProposalExecuted { id: u32, amount: U512 },
-    ProposalRejected { id: u32 },
-    AutoExecuted { amount: U512, signers: Vec<Address> },
+// Events as individual structs (Odra 2.x pattern)
+#[derive(odra::casper_event_standard::Event)]
+pub struct SwarmAgentAdded { pub addr: Address, pub role: SwarmRole }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct ProposalCreated { pub id: u32, pub title: String, pub amount: U512, pub proposer: Address }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct DeliberationLogged { pub proposal_id: u32, pub agent: Address, pub round: u32 }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct VoteCast { pub proposal_id: u32, pub voter: Address, pub support: bool, pub weight: U512 }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct ProposalExecuted { pub id: u32, pub amount: U512 }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct ProposalRejected { pub id: u32 }
+
+#[odra::module]
+pub struct TreasuryContract {
+    pub owner: Var<Address>,
+    pub balance: Var<U512>,
+    pub proposal_count: Var<u32>,
+    pub proposals: Mapping<u32, Proposal>,
+    pub log_count: Var<u32>,
+    pub deliberation_log: Mapping<u32, DeliberationEntry>,
+    pub swarm_agents: Mapping<Address, SwarmAgent>,
+    pub auto_execute_threshold: Var<U512>,
+    /// (proposal_id, voter_addr) → voted (true/false)
+    pub voters: Mapping<(u32, Address), bool>,
 }
 
 #[odra::module]
 impl TreasuryContract {
     pub fn init(&mut self, auto_execute_threshold: U512) {
-        let caller = env().caller();
+        let caller = self.env().caller();
         self.owner.set(caller);
         self.balance.set(U512::zero());
         self.proposal_count.set(0);
@@ -101,7 +98,6 @@ impl TreasuryContract {
         self.auto_execute_threshold.set(auto_execute_threshold);
     }
 
-    /// Add a swarm agent. Only owner.
     pub fn add_swarm_agent(&mut self, addr: Address, role: SwarmRole, reputation: u8) {
         self.assert_owner();
         assert!(
@@ -109,17 +105,16 @@ impl TreasuryContract {
             "Reputation below consensus minimum"
         );
         let agent = SwarmAgent { addr, role, reputation, active: true };
-        self.swarm_agents.set(&addr, agent);
-        env().emit_event(TreasuryEvent::SwarmAgentAdded { addr, role });
+        self.swarm_agents.set(&addr, agent.clone());
+        self.env().emit_event(SwarmAgentAdded { addr, role: agent.role });
     }
 
-    /// Create a proposal — only callable by an active swarm agent.
     pub fn create_proposal(&mut self, title: String, amount: U512) -> u32 {
-        let caller = env().caller();
-        let agent = self.swarm_agents.get(&caller).expect("Caller is not a swarm agent");
+        let caller = self.env().caller();
+        let agent = self.swarm_agents.get(&caller).unwrap_or_revert(self);
         assert!(agent.active, "Agent not active");
 
-        let id = self.proposal_count.get();
+        let id = self.proposal_count.get_or_default();
         let proposal = Proposal {
             id,
             title: title.clone(),
@@ -130,60 +125,47 @@ impl TreasuryContract {
             votes_for: U512::zero(),
             votes_against: U512::zero(),
             deliberation_rounds: 0,
-            voters: Mapping::new(),
-            created_block: env().block_height(),
+            created_block: self.env().get_block_time(),
             executed_block: None,
         };
         self.proposals.set(&id, proposal);
         self.proposal_count.set(id + 1);
 
-        env().emit_event(TreasuryEvent::ProposalCreated {
-            id,
-            title,
-            amount,
-            proposer: caller,
-        });
+        self.env().emit_event(ProposalCreated { id, title, amount, proposer: caller });
         id
     }
 
-    /// Append a deliberation log entry. Only swarm agents.
     pub fn log_deliberation(&mut self, proposal_id: u32, message: String) {
-        let caller = env().caller();
-        let agent = self.swarm_agents.get(&caller).expect("Caller is not a swarm agent");
+        let caller = self.env().caller();
+        let agent = self.swarm_agents.get(&caller).unwrap_or_revert(self);
 
-        let entry_id = self.log_count.get();
+        let entry_id = self.log_count.get_or_default();
         let entry = DeliberationEntry {
             id: entry_id,
             proposal_id,
             agent_addr: caller,
             agent_role: agent.role,
             message,
-            round: self.next_round_for(proposal_id),
-            block: env().block_height(),
+            round: 1,
+            block: self.env().get_block_time(),
         };
         self.deliberation_log.set(&entry_id, entry);
         self.log_count.set(entry_id + 1);
 
-        env().emit_event(TreasuryEvent::DeliberationLogged {
-            proposal_id,
-            agent: caller,
-            round: self.next_round_for(proposal_id),
-        });
+        self.env().emit_event(DeliberationLogged { proposal_id, agent: caller, round: 1 });
     }
 
-    /// Vote on a proposal — only swarm agents.
-    /// Weight is the agent's reputation × 1000.
     pub fn vote(&mut self, proposal_id: u32, support: bool) {
-        let caller = env().caller();
-        let agent = self.swarm_agents.get(&caller).expect("Caller is not a swarm agent");
+        let caller = self.env().caller();
+        let agent = self.swarm_agents.get(&caller).unwrap_or_revert(self);
         assert!(agent.active, "Agent not active");
 
-        let mut proposal = self.proposals.get(&proposal_id).expect("Proposal does not exist");
+        let mut proposal = self.proposals.get(&proposal_id).unwrap_or_revert(self);
         assert_eq!(proposal.status, ProposalStatus::Voting, "Proposal not in voting phase");
 
-        // Check hasn't already voted
+        let voter_key = (proposal_id, caller);
         assert!(
-            !proposal.voters.get(&caller).unwrap_or(false),
+            !self.voters.get(&voter_key).unwrap_or(false),
             "Already voted"
         );
 
@@ -193,115 +175,81 @@ impl TreasuryContract {
         } else {
             proposal.votes_against += weight;
         }
-        proposal.voters.set(&caller, true);
         self.proposals.set(&proposal_id, proposal.clone());
+        self.voters.set(&voter_key, true);
 
-        env().emit_event(TreasuryEvent::VoteCast {
-            proposal_id,
-            voter: caller,
-            support,
-            weight,
-        });
+        self.env().emit_event(VoteCast { proposal_id, voter: caller, support, weight });
 
         // Auto-execute if amount <= threshold AND 2-of-3 consensus reached
-        let threshold = self.auto_execute_threshold.get();
+        let threshold = self.auto_execute_threshold.get_or_default();
         if proposal.amount <= threshold {
-            let votes = self.count_votes(proposal_id);
-            if votes.for_count >= 2 && votes.total >= 3 {
+            let for_count = (proposal.votes_for / U512::from(1000)).as_u32();
+            let total = for_count + (proposal.votes_against / U512::from(1000)).as_u32();
+            if for_count >= 2 && total >= 3 {
                 self.execute_proposal_internal(proposal_id);
             }
         }
     }
 
-    /// Execute a proposal (governance path) — callable by anyone after
-    /// voting has reached quorum and majority.
     pub fn execute_proposal(&mut self, proposal_id: u32) {
-        let proposal = self.proposals.get(&proposal_id).expect("Proposal does not exist");
+        let proposal = self.proposals.get(&proposal_id).unwrap_or_revert(self);
         assert_eq!(proposal.status, ProposalStatus::Voting, "Proposal not in voting phase");
 
-        let votes = self.count_votes(proposal_id);
-        assert!(votes.total >= 3, "Quorum not reached");
-        assert!(votes.for_count > votes.against_count, "Not enough FOR votes");
+        let for_count = (proposal.votes_for / U512::from(1000)).as_u32();
+        let against_count = (proposal.votes_against / U512::from(1000)).as_u32();
+        let total = for_count + against_count;
+        assert!(total >= 3, "Quorum not reached");
+        assert!(for_count > against_count, "Not enough FOR votes");
 
         self.execute_proposal_internal(proposal_id);
     }
 
     fn execute_proposal_internal(&mut self, proposal_id: u32) {
-        let mut proposal = self.proposals.get(&proposal_id).expect("Proposal does not exist");
+        let mut proposal = self.proposals.get(&proposal_id).unwrap_or_revert(self);
         assert_eq!(proposal.status, ProposalStatus::Voting, "Proposal not in voting phase");
 
-        let balance = self.balance.get();
+        let balance = self.balance.get_or_default();
         assert!(balance >= proposal.amount, "Insufficient treasury balance");
 
-        // Execute: transfer to proposer (in real impl, would route to target)
-        env().transfer_tokens(&proposal.proposed_by, &proposal.amount);
+        self.env().transfer_tokens(&proposal.proposed_by, &proposal.amount);
         self.balance.set(balance - proposal.amount);
 
         proposal.status = ProposalStatus::Executed;
-        proposal.executed_block = Some(env().block_height());
-        self.proposals.set(&proposal_id, proposal.clone());
+        proposal.executed_block = Some(self.env().get_block_time());
+        let amount = proposal.amount;
+        self.proposals.set(&proposal_id, proposal);
 
-        env().emit_event(TreasuryEvent::ProposalExecuted {
-            id: proposal_id,
-            amount: proposal.amount,
-        });
+        self.env().emit_event(ProposalExecuted { id: proposal_id, amount });
     }
 
-    /// Deposit CSPR into the treasury.
-    #[payable]
+    #[odra(payable)]
     pub fn deposit(&mut self) {
-        let amount = env().attached_value();
-        let balance = self.balance.get();
+        let amount = self.env().attached_value();
+        let balance = self.balance.get_or_default();
         self.balance.set(balance + amount);
     }
 
-    /// Read-only helpers
     pub fn balance(&self) -> U512 {
-        self.balance.get()
+        self.balance.get_or_default()
     }
 
     pub fn proposal_count(&self) -> u32 {
-        self.proposal_count.get()
+        self.proposal_count.get_or_default()
     }
 
     pub fn get_proposal(&self, id: u32) -> Proposal {
-        self.proposals.get(&id).expect("Proposal does not exist")
+        self.proposals.get(&id).unwrap_or_revert(self)
     }
 
     pub fn get_deliberation(&self, id: u32) -> DeliberationEntry {
-        self.deliberation_log.get(&id).expect("Entry does not exist")
-    }
-
-    fn count_votes(&self, proposal_id: u32) -> VoteCounts {
-        let proposal = self.proposals.get(&proposal_id).expect("Proposal does not exist");
-        // In a real implementation we'd track voters in a list to iterate.
-        // For demo, we infer counts from a separate counter mapping.
-        // Here we just use votes_for / votes_against magnitude ÷ 1000 as count.
-        let for_count = (proposal.votes_for / U512::from(1000)).as_u32();
-        let against_count = (proposal.votes_against / U512::from(1000)).as_u32();
-        VoteCounts {
-            for_count,
-            against_count,
-            total: for_count + against_count,
-        }
-    }
-
-    fn next_round_for(&self, _proposal_id: u32) -> u32 {
-        // Simplified: in production we'd group entries by proposal and count.
-        1
+        self.deliberation_log.get(&id).unwrap_or_revert(self)
     }
 
     fn assert_owner(&self) {
-        let caller = env().caller();
-        let owner = self.owner.get();
+        let caller = self.env().caller();
+        let owner = self.owner.get().unwrap_or_revert(self);
         assert_eq!(caller, owner, "Only owner");
     }
-}
-
-struct VoteCounts {
-    for_count: u32,
-    against_count: u32,
-    total: u32,
 }
 
 pub fn module_id() -> ModuleId {

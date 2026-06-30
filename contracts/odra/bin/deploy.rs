@@ -1,67 +1,54 @@
-//! Deployment entrypoint — deploys all 5 SKYWEE contracts to Casper Testnet.
+//! SKYWEE — Real livenet deployment (Odra 2.x)
 //!
-//! Run with: `cargo run --bin deploy_skywee -- --network testnet`
+//! Jalankan dengan:
+//!   export ODRA_CASPER_LIVENET_SECRET_KEY_PATH=~/.casper/testnet/secret_key.pem
+//!   export ODRA_CASPER_LIVENET_NODE_ADDRESS=https://rpc.testnet.casper.network/rpc
+//!   export ODRA_CASPER_LIVENET_CHAIN_NAME=casper-test
+//!   export ODRA_CASPER_LIVENET_EVENTS_URL=https://events.testnet.casper.network
+//!   cargo run --bin deploy_skywee --features livenet --release
 
-use clap::Parser;
+use odra::casper_types::U512;
+use odra::host::{Deployer, HostEnv, NoArgs};
+use odra::prelude::Addressable;
 use skywee_contracts::{
-    AgentRegistry, AgentRegistryDeployer,
-    InsuranceContract, InsuranceContractDeployer,
-    TreasuryContract, TreasuryContractDeployer,
-    RwaVault, RwaVaultDeployer,
-    CarbonGuard, CarbonGuardDeployer,
+    AgentRegistry, CarbonGuard, InsuranceContract, RwaVault, TreasuryContract,
+    TreasuryContractInitArgs,
 };
 
-#[derive(Parser, Debug)]
-struct Args {
-    /// Network: testnet | mainnet
-    #[arg(long, default_value = "testnet")]
-    network: String,
+fn main() {
+    let env: HostEnv = odra_casper_livenet_env::env();
 
-    /// Node URL (overrides network default)
-    #[arg(long)]
-    node: Option<String>,
+    println!("🚀 Deploying SKYWEE contracts to Casper livenet...\n");
 
-    /// Path to secret key file
-    #[arg(long)]
-    key: String,
-}
+    // 1) AgentRegistry — init() tanpa argumen
+    env.set_gas(300_000_000_000u64);
+    let agent_registry = AgentRegistry::deploy(&env, NoArgs);
+    println!("AgentRegistry  : {:?}", agent_registry.address());
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
+    // 2) InsuranceContract — init() tanpa argumen
+    env.set_gas(300_000_000_000u64);
+    let insurance = InsuranceContract::deploy(&env, NoArgs);
+    println!("Insurance      : {:?}", insurance.address());
 
-    println!("🚀 Deploying SKYWEE contracts to Casper {}…", args.network);
-
-    // 1. AgentSquare — Agent Registry
-    let agent_registry = AgentRegistry::deploy(&AgentRegistryDeployer, &args.key)?;
-    println!("✓ AgentRegistry:        {}", agent_registry.address());
-
-    // 2. Aegis — Insurance
-    let insurance = InsuranceContract::deploy(&InsuranceContractDeployer, &args.key)?;
-    println!("✓ InsuranceContract:    {}", insurance.address());
-
-    // 3. SwarmTreasury — Treasury
+    // 3) TreasuryContract — init(auto_execute_threshold: U512)
+    env.set_gas(300_000_000_000u64);
     let treasury = TreasuryContract::deploy(
-        &TreasuryContractDeployer,
-        &args.key,
-        odra::U512::from(1_000_000_000_000), // auto-execute threshold: 1000 CSPR
-    )?;
-    println!("✓ TreasuryContract:     {}", treasury.address());
+        &env,
+        TreasuryContractInitArgs {
+            auto_execute_threshold: U512::from(1_000_000_000u64),
+        },
+    );
+    println!("Treasury       : {:?}", treasury.address());
 
-    // 4. RWA-X Vault
-    let rwa_vault = RwaVault::deploy(&RwaVaultDeployer, &args.key)?;
-    println!("✓ RwaVault:             {}", rwa_vault.address());
+    // 4) RwaVault — init() tanpa argumen
+    env.set_gas(300_000_000_000u64);
+    let rwa_vault = RwaVault::deploy(&env, NoArgs);
+    println!("RwaVault       : {:?}", rwa_vault.address());
 
-    // 5. CarbonGuard
-    let carbon_guard = CarbonGuard::deploy(&CarbonGuardDeployer, &args.key)?;
-    println!("✓ CarbonGuard:          {}", carbon_guard.address());
+    // 5) CarbonGuard — init() tanpa argumen
+    env.set_gas(300_000_000_000u64);
+    let carbon_guard = CarbonGuard::deploy(&env, NoArgs);
+    println!("CarbonGuard    : {:?}", carbon_guard.address());
 
-    println!("\n✅ All SKYWEE contracts deployed successfully.");
-    println!("\nContract addresses (save these for SKYWEE frontend .env):");
-    println!("  NEXT_PUBLIC_AGENT_REGISTRY_ADDR={}", agent_registry.address());
-    println!("  NEXT_PUBLIC_INSURANCE_ADDR={}", insurance.address());
-    println!("  NEXT_PUBLIC_TREASURY_ADDR={}", treasury.address());
-    println!("  NEXT_PUBLIC_RWA_VAULT_ADDR={}", rwa_vault.address());
-    println!("  NEXT_PUBLIC_CARBON_GUARD_ADDR={}", carbon_guard.address());
-
-    Ok(())
+    println!("\n✅ Selesai. Salin address di atas ke .env.local (format hash-...)");
 }

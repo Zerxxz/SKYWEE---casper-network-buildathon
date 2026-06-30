@@ -1,9 +1,10 @@
-//! Shared types & modules used across SKYWEE contracts.
+//! Shared types & modules used across SKYWEE contracts (Odra 2.x)
 
 use odra::prelude::*;
+use odra::casper_types::U512;
 
 /// Module identifier — matches the 5 SKYWEE modules.
-#[derive(OdraType, PartialEq, Eq, Clone, Copy)]
+#[odra::odra_type]
 pub enum ModuleId {
     AgentSquare,
     Aegis,
@@ -13,7 +14,7 @@ pub enum ModuleId {
 }
 
 /// Transaction type emitted as an event in every contract call.
-#[derive(OdraType, PartialEq, Eq, Clone)]
+#[odra::odra_type]
 pub struct TxEvent {
     pub module: ModuleId,
     pub tx_type: String,
@@ -31,13 +32,3 @@ pub const MAX_REPUTATION: Reputation = 100;
 
 /// Minimum reputation for an agent to participate in consensus.
 pub const MIN_CONSENSUS_REPUTATION: Reputation = 70;
-
-/// Helper: formatted short address string (first 6 + last 4 chars).
-pub fn short_addr(addr: &Address) -> String {
-    let s = format!("{:?}", addr);
-    if s.len() <= 12 {
-        s
-    } else {
-        format!("{}…{}", &s[..6], &s[s.len() - 4..])
-    }
-}

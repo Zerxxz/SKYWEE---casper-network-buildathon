@@ -1,15 +1,5 @@
-//! SKYWEE — Agentic Web3 OS smart contracts for Casper Network
-//!
-//! This crate contains the 5 core Odra smart contracts that power SKYWEE:
-//!
-//! 1. `agent_registry` — AgentSquare: agent registration, reputation attestation
-//! 2. `insurance`      — Aegis: parametric insurance policies + autonomous payout
-//! 3. `treasury`       — SwarmTreasury: multi-agent governance + execution
-//! 4. `rwa_vault`      — RWA-X Vault: fractionalization + agent-managed AMM
-//! 5. `carbon_guard`   — CarbonGuard: carbon credit verification + burn
-//!
-//! All contracts are written in the Odra framework and deploy to Casper Testnet.
-//! See README.md for deployment instructions.
+//! SKYWEE — Agentic Web3 OS smart contracts for Casper Network (Odra 2.x)
+#![cfg_attr(target_arch = "wasm32", no_std)]
 
 pub mod agent_registry;
 pub mod insurance;
@@ -23,3 +13,8 @@ pub use insurance::InsuranceContract;
 pub use treasury::TreasuryContract;
 pub use rwa_vault::RwaVault;
 pub use carbon_guard::CarbonGuard;
+
+// TreasuryContractInitArgs is only generated for native targets (used by deploy.rs).
+// On wasm32 targets, Odra does not emit the InitArgs struct.
+#[cfg(not(target_arch = "wasm32"))]
+pub use treasury::TreasuryContractInitArgs;

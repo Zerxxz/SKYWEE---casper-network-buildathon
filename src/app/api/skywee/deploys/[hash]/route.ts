@@ -26,7 +26,7 @@ export async function GET(
       try {
         const { RpcClient } = await import("casper-js-sdk")
         const client = new RpcClient(RPC_URL)
-        const info = await client.getDeployInfo(hash)
+        const info = await client.getDeploy(hash)
         if (info) {
           return ok({
             hash,
@@ -37,7 +37,7 @@ export async function GET(
           })
         }
       } catch (e) {
-        console.warn("RPC getDeployInfo failed:", e instanceof Error ? e.message : String(e))
+        console.warn("RPC getDeploy failed:", e instanceof Error ? e.message : String(e))
       }
     }
 

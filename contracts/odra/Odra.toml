@@ -1,0 +1,19 @@
+[[contracts]]
+name = "AgentRegistry"
+fqn = "skywee_contracts::AgentRegistry"
+
+[[contracts]]
+name = "InsuranceContract"
+fqn = "skywee_contracts::InsuranceContract"
+
+[[contracts]]
+name = "TreasuryContract"
+fqn = "skywee_contracts::TreasuryContract"
+
+[[contracts]]
+name = "RwaVault"
+fqn = "skywee_contracts::RwaVault"
+
+[[contracts]]
+name = "CarbonGuard"
+fqn = "skywee_contracts::CarbonGuard"

@@ -1,31 +1,10 @@
-//! CarbonGuard — Autonomous Carbon Verification Contract
-//!
-//! Tokenizes voluntary carbon credits as RWA. A verification agent
-//! (VER-Gaia) pulls satellite + IoT data via x402-paid APIs, validates
-//! project claims, and autonomously burns credits when deforestation
-//! or non-performance is detected.
+//! CarbonGuard — Autonomous Carbon Verification Contract (Odra 2.x)
 
 use odra::prelude::*;
+use odra::casper_types::U512;
 use crate::shared::ModuleId;
 
-#[odra::module_state]
-pub struct CarbonGuardState {
-    pub owner: Variable<Address>,
-    /// Project counter — next project ID.
-    pub project_count: u32,
-    /// Project ID → Project.
-    pub projects: Mapping<u32, CarbonProject>,
-    /// Authorized verifier agent.
-    pub verifier: Variable<Address>,
-    /// Total credits issued across all projects.
-    pub total_issued: Variable<U512>,
-    /// Total credits retired across all projects.
-    pub total_retired: Variable<U512>,
-    /// Per-credit balance: (project_id, holder) → balance.
-    pub balances: Mapping<(u32, Address), U512>,
-}
-
-#[derive(OdraType, Clone)]
+#[odra::odra_type]
 pub struct CarbonProject {
     pub id: u32,
     pub name: String,
@@ -38,42 +17,62 @@ pub struct CarbonProject {
     pub registered_block: u64,
 }
 
-#[derive(OdraType, PartialEq, Eq, Clone, Copy)]
+#[odra::odra_type]
 pub enum VerificationStatus {
     Verified,
     Pending,
     Flagged,
 }
 
-#[derive(OdraEvent)]
-pub enum CarbonGuardEvent {
-    ProjectRegistered { id: u32, name: String, location: String, credits: U512 },
-    VerifierSet { addr: Address },
-    VerificationPassed { project_id: u32, block: u64 },
-    VerificationFailed { project_id: u32, reason: String },
-    CreditsBurned { project_id: u32, amount: U512, total_burned: U512 },
-    CreditsTransferred { project_id: u32, from: Address, to: Address, amount: U512 },
-    CreditsRetired { project_id: u32, holder: Address, amount: U512 },
+// Events as individual structs (Odra 2.x pattern)
+#[derive(odra::casper_event_standard::Event)]
+pub struct ProjectRegistered { pub id: u32, pub name: String, pub location: String, pub credits: U512 }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct VerifierSet { pub addr: Address }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct VerificationPassed { pub project_id: u32, pub block: u64 }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct VerificationFailed { pub project_id: u32, pub reason: String }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct CreditsBurned { pub project_id: u32, pub amount: U512, pub total_burned: U512 }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct CreditsTransferred { pub project_id: u32, pub from: Address, pub to: Address, pub amount: U512 }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct CreditsRetired { pub project_id: u32, pub holder: Address, pub amount: U512 }
+
+#[odra::module]
+pub struct CarbonGuard {
+    pub owner: Var<Address>,
+    pub project_count: Var<u32>,
+    pub projects: Mapping<u32, CarbonProject>,
+    pub verifier: Var<Address>,
+    pub total_issued: Var<U512>,
+    pub total_retired: Var<U512>,
+    pub balances: Mapping<(u32, Address), U512>,
 }
 
 #[odra::module]
 impl CarbonGuard {
     pub fn init(&mut self) {
-        let caller = env().caller();
+        let caller = self.env().caller();
         self.owner.set(caller);
         self.project_count.set(0);
         self.total_issued.set(U512::zero());
         self.total_retired.set(U512::zero());
     }
 
-    /// Set the authorized verifier agent. Only owner.
     pub fn set_verifier(&mut self, addr: Address) {
         self.assert_owner();
         self.verifier.set(addr);
-        env().emit_event(CarbonGuardEvent::VerifierSet { addr });
+        self.env().emit_event(VerifierSet { addr });
     }
 
-    /// Register a new carbon project. Caller receives the initial credits.
     pub fn register_project(
         &mut self,
         name: String,
@@ -81,8 +80,8 @@ impl CarbonGuard {
         project_type: String,
         credits: U512,
     ) -> u32 {
-        let caller = env().caller();
-        let id = self.project_count.get();
+        let caller = self.env().caller();
+        let id = self.project_count.get_or_default();
         let project = CarbonProject {
             id,
             name: name.clone(),
@@ -91,54 +90,40 @@ impl CarbonGuard {
             credits_issued: credits,
             credits_retired: U512::zero(),
             verification: VerificationStatus::Pending,
-            last_check_block: env().block_height(),
-            registered_block: env().block_height(),
+            last_check_block: self.env().get_block_time(),
+            registered_block: self.env().get_block_time(),
         };
         self.projects.set(&id, project);
 
-        // Issue credits to caller
         self.balances.set(&(id, caller), credits);
-        let total = self.total_issued.get();
+        let total = self.total_issued.get_or_default();
         self.total_issued.set(total + credits);
 
         self.project_count.set(id + 1);
-        env().emit_event(CarbonGuardEvent::ProjectRegistered {
-            id,
-            name,
-            location,
-            credits,
-        });
+        self.env().emit_event(ProjectRegistered { id, name, location, credits });
         id
     }
 
-    /// Verifier: pass verification for a project.
     pub fn verify_project(&mut self, project_id: u32) {
         self.assert_verifier();
-        let mut project = self.projects.get(&project_id).expect("Project does not exist");
+        let mut project = self.projects.get(&project_id).unwrap_or_revert(self);
         project.verification = VerificationStatus::Verified;
-        project.last_check_block = env().block_height();
+        project.last_check_block = self.env().get_block_time();
         self.projects.set(&project_id, project);
 
-        env().emit_event(CarbonGuardEvent::VerificationPassed {
-            project_id,
-            block: env().block_height(),
-        });
+        self.env().emit_event(VerificationPassed { project_id, block: self.env().get_block_time() });
     }
 
-    /// Verifier: flag a project — automatically burns all unretired credits.
     pub fn flag_project(&mut self, project_id: u32, reason: String) {
         self.assert_verifier();
-        let mut project = self.projects.get(&project_id).expect("Project does not exist");
+        let mut project = self.projects.get(&project_id).unwrap_or_revert(self);
 
-        // Burn all unretired credits
         let to_burn = project.credits_issued - project.credits_retired;
         if to_burn > U512::zero() {
-            // Iterate holders and zero balances — in production would use a holder list
-            // For demo, we just update project-level totals
             project.credits_retired = project.credits_issued;
-            let total_retired = self.total_retired.get();
+            let total_retired = self.total_retired.get_or_default();
             self.total_retired.set(total_retired + to_burn);
-            env().emit_event(CarbonGuardEvent::CreditsBurned {
+            self.env().emit_event(CreditsBurned {
                 project_id,
                 amount: to_burn,
                 total_burned: project.credits_retired,
@@ -146,15 +131,14 @@ impl CarbonGuard {
         }
 
         project.verification = VerificationStatus::Flagged;
-        project.last_check_block = env().block_height();
+        project.last_check_block = self.env().get_block_time();
         self.projects.set(&project_id, project);
 
-        env().emit_event(CarbonGuardEvent::VerificationFailed { project_id, reason });
+        self.env().emit_event(VerificationFailed { project_id, reason });
     }
 
-    /// Transfer credits between holders.
     pub fn transfer(&mut self, project_id: u32, to: Address, amount: U512) {
-        let caller = env().caller();
+        let caller = self.env().caller();
         let key = (project_id, caller);
         let from_balance = self.balances.get(&key).unwrap_or(U512::zero());
         assert!(from_balance >= amount, "Insufficient balance");
@@ -164,52 +148,41 @@ impl CarbonGuard {
         let to_balance = self.balances.get(&to_key).unwrap_or(U512::zero());
         self.balances.set(&to_key, to_balance + amount);
 
-        env().emit_event(CarbonGuardEvent::CreditsTransferred {
-            project_id,
-            from: caller,
-            to,
-            amount,
-        });
+        self.env().emit_event(CreditsTransferred { project_id, from: caller, to, amount });
     }
 
-    /// Retire (permanently burn) credits — called by holder.
     pub fn retire(&mut self, project_id: u32, amount: U512) {
-        let caller = env().caller();
+        let caller = self.env().caller();
         let key = (project_id, caller);
         let balance = self.balances.get(&key).unwrap_or(U512::zero());
         assert!(balance >= amount, "Insufficient balance");
 
         self.balances.set(&key, balance - amount);
 
-        let mut project = self.projects.get(&project_id).expect("Project does not exist");
+        let mut project = self.projects.get(&project_id).unwrap_or_revert(self);
         project.credits_retired += amount;
         self.projects.set(&project_id, project);
 
-        let total = self.total_retired.get();
+        let total = self.total_retired.get_or_default();
         self.total_retired.set(total + amount);
 
-        env().emit_event(CarbonGuardEvent::CreditsRetired {
-            project_id,
-            holder: caller,
-            amount,
-        });
+        self.env().emit_event(CreditsRetired { project_id, holder: caller, amount });
     }
 
-    /// Read-only
     pub fn project_count(&self) -> u32 {
-        self.project_count.get()
+        self.project_count.get_or_default()
     }
 
     pub fn total_issued(&self) -> U512 {
-        self.total_issued.get()
+        self.total_issued.get_or_default()
     }
 
     pub fn total_retired(&self) -> U512 {
-        self.total_retired.get()
+        self.total_retired.get_or_default()
     }
 
     pub fn get_project(&self, id: u32) -> CarbonProject {
-        self.projects.get(&id).expect("Project does not exist")
+        self.projects.get(&id).unwrap_or_revert(self)
     }
 
     pub fn balance_of(&self, project_id: u32, holder: Address) -> U512 {
@@ -217,14 +190,14 @@ impl CarbonGuard {
     }
 
     fn assert_owner(&self) {
-        let caller = env().caller();
-        let owner = self.owner.get();
+        let caller = self.env().caller();
+        let owner = self.owner.get().unwrap_or_revert(self);
         assert_eq!(caller, owner, "Only owner");
     }
 
     fn assert_verifier(&self) {
-        let caller = env().caller();
-        let v = self.verifier.get();
+        let caller = self.env().caller();
+        let v = self.verifier.get().unwrap_or_revert(self);
         assert_eq!(caller, v, "Only verifier");
     }
 }

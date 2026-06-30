@@ -36,6 +36,8 @@ export interface NetworkConfig {
   currencySymbol: string
   /** Explorer URL */
   explorerUrl: string
+  /** SSE events URL (for odra-casper-livenet-env event stream) */
+  eventsUrl: string
 }
 
 // =========================================================================
@@ -137,19 +139,21 @@ export const SEED_AGENTS: SeedAgentSpec[] = [
 export const NETWORKS: Record<string, NetworkConfig> = {
   testnet: {
     name: "casper-test",
-    rpcUrl: "http://rpc.testnet.casper.network:7777/rpc",
+    rpcUrl: "https://rpc.testnet.casper.network/rpc",
     chainName: "casper-test",
     blockTimeMs: 16_000,
     currencySymbol: "CSPR",
     explorerUrl: "https://testnet.cspr.live",
+    eventsUrl: "https://events.testnet.casper.network",
   },
   mainnet: {
     name: "casper",
-    rpcUrl: "http://rpc.mainnet.casper.network:7777/rpc",
+    rpcUrl: "https://rpc.mainnet.casper.network/rpc",
     chainName: "casper",
     blockTimeMs: 32_000,
     currencySymbol: "CSPR",
     explorerUrl: "https://cspr.live",
+    eventsUrl: "https://events.casper.network",
   },
 }
 

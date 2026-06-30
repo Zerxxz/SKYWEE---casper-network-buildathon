@@ -1,28 +1,10 @@
-//! RWA-X Vault — Agent-Managed RWA AMM Contract
-//!
-//! Fractionalizes real-world assets (invoices, cargo, bonds, real-estate)
-//! into Casper-native tokens. The market-maker agent runs Dutch auctions
-//! for new issuances and rebalances the AMM curve based on demand.
+//! RWA-X Vault — Agent-Managed RWA AMM Contract (Odra 2.x)
 
 use odra::prelude::*;
+use odra::casper_types::U512;
 use crate::shared::ModuleId;
 
-#[odra::module_state]
-pub struct RwaVaultState {
-    pub owner: Variable<Address>,
-    /// Asset counter — next asset ID.
-    pub asset_count: u32,
-    /// Asset ID → Asset.
-    pub assets: Mapping<u32, RwaAsset>,
-    /// Asset ID → AMM curve params (a simple constant-product variant).
-    pub curves: Mapping<u32, AmmCurve>,
-    /// Authorized market-maker agent.
-    pub market_maker: Variable<Address>,
-    /// Vault balance (CSPR).
-    pub vault_balance: Variable<U512>,
-}
-
-#[derive(OdraType, Clone)]
+#[odra::odra_type]
 pub struct RwaAsset {
     pub id: u32,
     pub name: String,
@@ -30,20 +12,20 @@ pub struct RwaAsset {
     pub total_value: U512,
     pub tokenized: U512,
     pub holders: u32,
-    pub apy_bps: u32, // APY in basis points (114 = 1.14%)
-    pub amm_price: U512, // current price in CSPR-micro
+    pub apy_bps: u32,
+    pub amm_price: U512,
     pub status: AssetStatus,
     pub created_block: u64,
 }
 
-#[derive(OdraType, PartialEq, Eq, Clone, Copy)]
+#[odra::odra_type]
 pub enum AssetStatus {
     Active,
     Frozen,
     Matured,
 }
 
-#[derive(OdraType, Clone)]
+#[odra::odra_type]
 pub struct AmmCurve {
     pub asset_id: u32,
     pub reserve_token: U512,
@@ -51,34 +33,50 @@ pub struct AmmCurve {
     pub fee_bps: u32,
 }
 
-#[derive(OdraEvent)]
-pub enum RwaVaultEvent {
-    AssetFractionalized { id: u32, name: String, total_value: U512 },
-    MarketMakerSet { addr: Address },
-    DutchAuctionOpened { asset_id: u32, start_price: U512 },
-    DutchAuctionFilled { asset_id: u32, fill_price: U512, buyer: Address },
-    AmmRebalanced { asset_id: u32, new_reserve_token: U512, new_reserve_cspr: U512 },
-    SwapExecuted { asset_id: u32, amount_in: U512, amount_out: U512, buyer: Address },
+// Events as individual structs (Odra 2.x pattern)
+#[derive(odra::casper_event_standard::Event)]
+pub struct AssetFractionalized { pub id: u32, pub name: String, pub total_value: U512 }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct MarketMakerSet { pub addr: Address }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct DutchAuctionOpened { pub asset_id: u32, pub start_price: U512 }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct DutchAuctionFilled { pub asset_id: u32, pub fill_price: U512, pub buyer: Address }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct AmmRebalanced { pub asset_id: u32, pub new_reserve_token: U512, pub new_reserve_cspr: U512 }
+
+#[derive(odra::casper_event_standard::Event)]
+pub struct SwapExecuted { pub asset_id: u32, pub amount_in: U512, pub amount_out: U512, pub buyer: Address }
+
+#[odra::module]
+pub struct RwaVault {
+    pub owner: Var<Address>,
+    pub asset_count: Var<u32>,
+    pub assets: Mapping<u32, RwaAsset>,
+    pub curves: Mapping<u32, AmmCurve>,
+    pub market_maker: Var<Address>,
+    pub vault_balance: Var<U512>,
 }
 
 #[odra::module]
 impl RwaVault {
     pub fn init(&mut self) {
-        let caller = env().caller();
+        let caller = self.env().caller();
         self.owner.set(caller);
         self.asset_count.set(0);
         self.vault_balance.set(U512::zero());
     }
 
-    /// Set the authorized market-maker agent. Only owner.
     pub fn set_market_maker(&mut self, addr: Address) {
         self.assert_owner();
         self.market_maker.set(addr);
-        env().emit_event(RwaVaultEvent::MarketMakerSet { addr });
+        self.env().emit_event(MarketMakerSet { addr });
     }
 
-    /// Fractionalize a new RWA into tokens. Caller becomes the issuer.
-    /// In production this would mint an NFT/ERC20-equivalent on Casper.
     pub fn fractionalize(
         &mut self,
         name: String,
@@ -86,8 +84,7 @@ impl RwaVault {
         total_value: U512,
         apy_bps: u32,
     ) -> u32 {
-        let caller = env().caller();
-        let id = self.asset_count.get();
+        let id = self.asset_count.get_or_default();
         let asset = RwaAsset {
             id,
             name: name.clone(),
@@ -96,65 +93,50 @@ impl RwaVault {
             tokenized: total_value,
             holders: 1,
             apy_bps,
-            amm_price: U512::from(1_000_000_000), // 1.0 in micro
+            amm_price: U512::from(1_000_000_000),
             status: AssetStatus::Active,
-            created_block: env().block_height(),
+            created_block: self.env().get_block_time(),
         };
         self.assets.set(&id, asset);
 
-        // Initialize AMM curve
         self.curves.set(
             &id,
             AmmCurve {
                 asset_id: id,
                 reserve_token: total_value,
-                reserve_cspr: total_value, // 1:1 initial
-                fee_bps: 30, // 0.3%
+                reserve_cspr: total_value,
+                fee_bps: 30,
             },
         );
         self.asset_count.set(id + 1);
 
-        env().emit_event(RwaVaultEvent::AssetFractionalized {
-            id,
-            name,
-            total_value,
-        });
+        self.env().emit_event(AssetFractionalized { id, name, total_value });
         id
     }
 
-    /// Market-maker: open a Dutch auction for new issuance.
     pub fn open_dutch_auction(&mut self, asset_id: u32, start_price: U512) {
         self.assert_market_maker();
-        let _asset = self.assets.get(&asset_id).expect("Asset does not exist");
-        env().emit_event(RwaVaultEvent::DutchAuctionOpened {
-            asset_id,
-            start_price,
-        });
+        let _asset = self.assets.get(&asset_id).unwrap_or_revert(self);
+        self.env().emit_event(DutchAuctionOpened { asset_id, start_price });
     }
 
-    /// Fill a Dutch auction at current price. Caller pays CSPR.
-    #[payable]
+    #[odra(payable)]
     pub fn fill_dutch_auction(&mut self, asset_id: u32, max_price: U512) {
-        let caller = env().caller();
-        let payment = env().attached_value();
+        let caller = self.env().caller();
+        let payment = self.env().attached_value();
         assert!(payment <= max_price, "Price exceeds maximum");
 
-        let mut asset = self.assets.get(&asset_id).expect("Asset does not exist");
+        let mut asset = self.assets.get(&asset_id).unwrap_or_revert(self);
         asset.amm_price = payment;
         asset.holders += 1;
         self.assets.set(&asset_id, asset);
 
-        let vault = self.vault_balance.get();
+        let vault = self.vault_balance.get_or_default();
         self.vault_balance.set(vault + payment);
 
-        env().emit_event(RwaVaultEvent::DutchAuctionFilled {
-            asset_id,
-            fill_price: payment,
-            buyer: caller,
-        });
+        self.env().emit_event(DutchAuctionFilled { asset_id, fill_price: payment, buyer: caller });
     }
 
-    /// Market-maker: rebalance the AMM curve for an asset.
     pub fn rebalance_amm(
         &mut self,
         asset_id: u32,
@@ -162,26 +144,20 @@ impl RwaVault {
         new_reserve_cspr: U512,
     ) {
         self.assert_market_maker();
-        let mut curve = self.curves.get(&asset_id).expect("Curve does not exist");
+        let mut curve = self.curves.get(&asset_id).unwrap_or_revert(self);
         curve.reserve_token = new_reserve_token;
         curve.reserve_cspr = new_reserve_cspr;
-        self.curves.set(&asset_id, curve.clone());
+        self.curves.set(&asset_id, curve);
 
-        env().emit_event(RwaVaultEvent::AmmRebalanced {
-            asset_id,
-            new_reserve_token,
-            new_reserve_cspr,
-        });
+        self.env().emit_event(AmmRebalanced { asset_id, new_reserve_token, new_reserve_cspr });
     }
 
-    /// Constant-product swap: token in → CSPR out (or vice versa).
-    #[payable]
+    #[odra(payable)]
     pub fn swap(&mut self, asset_id: u32, token_in: bool, amount_in: U512) {
-        let caller = env().caller();
-        let mut curve = self.curves.get(&asset_id).expect("Curve does not exist");
+        let caller = self.env().caller();
+        let mut curve = self.curves.get(&asset_id).unwrap_or_revert(self);
 
         let amount_out = if token_in {
-            // x * y = k
             let k = curve.reserve_token * curve.reserve_cspr;
             let new_token = curve.reserve_token + amount_in;
             let new_cspr = k / new_token;
@@ -200,40 +176,34 @@ impl RwaVault {
         };
 
         self.curves.set(&asset_id, curve);
-        env().emit_event(RwaVaultEvent::SwapExecuted {
-            asset_id,
-            amount_in,
-            amount_out,
-            buyer: caller,
-        });
+        self.env().emit_event(SwapExecuted { asset_id, amount_in, amount_out, buyer: caller });
     }
 
-    /// Read-only
     pub fn asset_count(&self) -> u32 {
-        self.asset_count.get()
+        self.asset_count.get_or_default()
     }
 
     pub fn vault_balance(&self) -> U512 {
-        self.vault_balance.get()
+        self.vault_balance.get_or_default()
     }
 
     pub fn get_asset(&self, id: u32) -> RwaAsset {
-        self.assets.get(&id).expect("Asset does not exist")
+        self.assets.get(&id).unwrap_or_revert(self)
     }
 
     pub fn get_curve(&self, id: u32) -> AmmCurve {
-        self.curves.get(&id).expect("Curve does not exist")
+        self.curves.get(&id).unwrap_or_revert(self)
     }
 
     fn assert_owner(&self) {
-        let caller = env().caller();
-        let owner = self.owner.get();
+        let caller = self.env().caller();
+        let owner = self.owner.get().unwrap_or_revert(self);
         assert_eq!(caller, owner, "Only owner");
     }
 
     fn assert_market_maker(&self) {
-        let caller = env().caller();
-        let mm = self.market_maker.get();
+        let caller = self.env().caller();
+        let mm = self.market_maker.get().unwrap_or_revert(self);
         assert_eq!(caller, mm, "Only market-maker");
     }
 }

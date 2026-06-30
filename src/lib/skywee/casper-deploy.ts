@@ -76,7 +76,7 @@ export interface SignedDeployResult {
 // Environment helpers
 // =========================================================================
 
-const RPC_URL = process.env.CASPER_RPC_URL ?? "http://rpc.testnet.casper.network:7777/rpc"
+const RPC_URL = process.env.CASPER_RPC_URL ?? "https://rpc.testnet.casper.network/rpc"
 const NETWORK_NAME = process.env.CASPER_NETWORK_NAME ?? process.env.CASPER_CHAIN_NAME ?? "casper-test"
 
 const CONTRACT_HASHES: Record<string, string | undefined> = {
