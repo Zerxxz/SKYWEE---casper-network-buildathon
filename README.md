@@ -179,7 +179,8 @@ CSPR_CLOUD_API_KEY for live" so it's clear when real data is missing.
 ### Prerequisites
 
 - **Bun** ≥ 1.0
-- **Rust** ≥ 1.75 (for contract compilation only)
+- **Rust** pinned to **1.85.0** (for contract compilation only — see `contracts/odra/rust-toolchain.toml`). This is the first rustc that supports `edition2024` (needed by transitive deps like `zeroize 1.9.x`) while still being cleanable by `-C target-feature=-bulk-memory` + `wasm-opt` for Casper.
+- **Binaryen** (`wasm-opt`) — required for the post-build step that strips bulk-memory ops. Install via `apt install binaryen` / `brew install binaryen`.
 - **Casper Wallet** browser extension (optional — demo mode works without it)
 - **CSPR.cloud API key** (optional — cached fallback works without it)
 
@@ -208,11 +209,30 @@ update environment configuration, and run a health check.
 
 #### Prerequisites (for real deploy)
 
-- **Rust** + cargo: <https://rustup.rs>
-- **Odra CLI**: `cargo install odra-cli`
+- **Rust** 1.85.0 (pinned via `contracts/odra/rust-toolchain.toml`): <https://rustup.rs>
+- **Odra CLI**: `cargo install cargo-odra --locked`
+- **Binaryen** (`wasm-opt`): `apt install binaryen` / `brew install binaryen` — used by `contracts/odra/scripts/optimize-wasm.sh` to lower bulk-memory ops before deploy.
 - **Casper Wallet key file** (.pem): generate with `casper-client keygen` or
   export from your Casper Wallet extension
 - **Testnet CSPR** for gas: get from faucet at <https://testnet.cspr.live/faucet>
+
+> **Why pinned to 1.85.0?** Two competing constraints:
+> 1. `zeroize 1.9.x` and other transitive deps require `edition2024`, which
+>    only stabilized in rustc 1.85. Older rustc (1.81/1.82) cannot parse
+>    their manifests at all.
+> 2. Since rustc 1.82 (LLVM 19), the `wasm32-unknown-unknown` backend lowers
+>    `memcpy`/`memset` into `memory.copy`/`memory.fill` and emits a data-count
+>    section — both rejected by Casper's wasmi-0.x preprocessor with
+>    `Deserialization error: Bulk memory operations are not supported`.
+>
+> 1.85.0 is the sweet spot: it satisfies (1), and for (2) we add
+> `-C target-feature=-bulk-memory` in `.cargo/config.toml` plus a
+> `wasm-opt --llvm-memory-copy-fill-lowering --strip-target-features` post-build
+> pass (`scripts/optimize-wasm.sh`) to strip any residual bulk-memory opcodes
+> coming from the precompiled std.
+>
+> See [casper-network/casper-node#4367](https://github.com/casper-network/casper-node/issues/4367)
+> and [rust-lang/rust#132620](https://github.com/rust-lang/rust/issues/132620).
 
 #### Quick start
 

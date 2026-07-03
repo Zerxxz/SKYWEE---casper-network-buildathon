@@ -1,4 +1,12 @@
 [target.wasm32-unknown-unknown]
 rustflags = [
+  # Odra host imports (casper_* host functions) are resolved at deploy time;
+  # allow undefined symbols at link time so the cdylib builds standalone.
   "-C", "link-arg=--allow-undefined",
+  # CRITICAL for Casper: disable the bulk-memory codegen at the LLVM level.
+  # Without this, even on rustc 1.81 LLVM may still emit memory.copy / memory.fill
+  # for some intrinsics, and the resulting wasm carries the data-count section
+  # (section ID 12) which Casper's wasm preprocessor cannot deserialize.
+  # +mutable-globals is kept ON because Casper requires it.
+  "-C", "target-feature=-bulk-memory,+mutable-globals",
 ]

@@ -1,0 +1,31 @@
+[toolchain]
+# Pinned to nightly-2026-01-01 — this is the exact toolchain the Odra framework
+# 2.8.x is built and tested against (see odradev/odra/rust-toolchain.toml).
+#
+# Why nightly, not stable?
+#   - `odra-casper-wasm-env` uses `#![feature(core_intrinsics)]` which is
+#     nightly-only. Stable rustc (e.g. 1.85) refuses to compile it with
+#     error E0554.
+#
+# Why this specific nightly?
+#   - It matches Odra's own CI pin, so behaviour is reproducible.
+#
+# What about Casper's "Bulk memory operations are not supported" error?
+#   - Modern rustc (≥ 1.82, including all 2025/2026 nightlies) emits
+#     memory.copy / memory.fill / data count section in the wasm backend.
+#   - We mitigate this with TWO layers:
+#       (1) `.cargo/config.toml` adds `-C target-feature=-bulk-memory`
+#           so LLVM stops emitting these for OUR crate.
+#       (2) `scripts/optimize-wasm.sh` runs `wasm-opt --llvm-memory-copy-fill-lowering
+#           --strip-target-features -Oz` to lower any residual bulk-memory
+#           opcodes coming from the precompiled std library into MVP loops,
+#           and strip the target_features custom section.
+#   - After both passes, the resulting wasm is fully Casper-compatible.
+#
+# Background:
+#   - https://github.com/rust-lang/rust/issues/132620  (bulk-memory regression)
+#   - https://github.com/casper-network/casper-node/issues/4367  (Casper rejects bulk-memory)
+channel = "nightly-2026-01-01"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"

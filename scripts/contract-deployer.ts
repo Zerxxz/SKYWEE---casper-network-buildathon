@@ -203,6 +203,19 @@ function buildContracts(): boolean {
     return false
   }
   logger.success(`WASM build successful (5 contracts in ${wasmDir})`)
+
+  // Post-build optimization: strip bulk-memory opcodes so Casper's wasm
+  // preprocessor accepts the modules. Casper's wasmi-0.x validator rejects
+  // any module containing memory.copy / memory.fill / data count section.
+  // See: https://github.com/casper-network/casper-node/issues/4367
+  logger.step("Optimizing WASM for Casper (lowering bulk-memory ops)...")
+  const opt = run("bash scripts/optimize-wasm.sh", { cwd: CONTRACTS_DIR })
+  if (!opt.success) {
+    logger.error("WASM optimization failed:")
+    console.error(opt.stderr)
+    return false
+  }
+  logger.success("WASM optimized — no bulk-memory operations remain")
   return true
 }
 
