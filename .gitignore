@@ -54,3 +54,14 @@ server.log
 /skills/
 # SKYWEE deploy state (contract hashes from local deploys)
 .skywee-deploy/
+
+# Output of the alternative casper-client deploy script
+# (snippet meant to be copied into .env.local manually)
+.env.local.deployed
+
+# Rust build artifacts (cargo target dir)
+target/
+**/target/
+
+# Cargo lockfile should be kept for binaries (which smart contracts effectively are)
+# — see contracts/odra/Cargo.lock

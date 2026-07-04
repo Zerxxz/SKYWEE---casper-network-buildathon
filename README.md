@@ -278,6 +278,61 @@ bun run deploy -- --network mainnet --key ~/.casper/mainnet/secret_key.pem
 bun run deploy -- --key ~/.casper/testnet/secret_key.pem --skip-build
 ```
 
+#### Alternative: deploy via `casper-client` CLI (no nightly Rust, no SSE)
+
+If you hit issues with Odra's `livenet-env` (SSE stream hangs, nightly Rust
+quirks, etc.), you can deploy the same 5 wasms using the official
+`casper-client` CLI instead. The contracts and wasms stay the same — only
+the deploy mechanism changes.
+
+**Prerequisites:**
+
+- `casper-client` installed: `cargo install casper-client --locked` (or `apt install casper-client`)
+- The 5 `.wasm` files already built (run `cd contracts/odra && cargo odra build` once)
+- A Casper Testnet secret key PEM file with ≥50 CSPR for gas
+
+**Usage:**
+
+```bash
+# Dry run — prints the exact casper-client commands without submitting
+bash scripts/deploy-casper-client.sh \
+  --network testnet \
+  --key ~/.casper/testnet/secret_key.pem \
+  --dry-run
+
+# Real deploy
+bash scripts/deploy-casper-client.sh \
+  --network testnet \
+  --key ~/.casper/testnet/secret_key.pem
+```
+
+**What it does (vs. the Odra path):**
+
+| Step | `bun run deploy` (Odra) | `deploy-casper-client.sh` |
+|------|------------------------|--------------------------|
+| Build wasm | `cargo odra build` | Same — reuses the same `.wasm` files |
+| Submit deploy | `cargo run --bin deploy_skywee --features livenet` (uses Odra livenet-env) | `casper-client put-deploy` (5 invocations) |
+| Wait for execution | SSE event stream (can hang if events URL is wrong) | Polls `get-deploy` every 16s (no SSE) |
+| Extract contract hash | Odra prints it to stdout | Parses `WriteContractPackage` transform from execution result |
+| Init args (TreasuryContract) | Hardcoded in `bin/deploy.rs` | Passed via `--session-arg "auto_execute_threshold:u512='1000000000'"` |
+| Output | `.skywee-deploy/` state files + `.env.local` | `.env.local.deployed` snippet (copy into `.env.local` manually) |
+
+**Trade-offs:**
+
+- ✅ **Pro**: No nightly Rust needed to deploy (only to build wasms)
+- ✅ **Pro**: No SSE dependency — works even if events URL is unreachable
+- ✅ **Pro**: Each `casper-client` call is independently debuggable
+- ❌ **Con**: Doesn't run the agent seeder step (register agents via the UI after deploy)
+- ❌ **Con**: Doesn't auto-update `.env.local` — copy the snippet manually
+
+**After deploying via this alternative**, copy the contents of `.env.local.deployed`
+into your actual `.env.local`, then restart the dev server:
+
+```bash
+cat .env.local.deployed >> .env.local
+bun run dev
+```
+
 #### What gets deployed
 
 | Contract | Module | Description |
