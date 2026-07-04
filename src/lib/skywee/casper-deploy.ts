@@ -2,7 +2,7 @@
  * SKYWEE — Real Casper deploy construction & broadcasting.
  *
  * This module provides utilities for building, signing, and broadcasting
- * real Casper deploys via the casper-js-sdk. The signing is done by the
+ * real Casper deploys via casper-js-sdk@5.0.12. Signing is done by the
  * Casper Wallet browser extension via `window.casperWalletProvider.signDeploy()`.
  *
  * Flow (when real wallet connected):
@@ -16,7 +16,7 @@
  * flow that's already in place.
  *
  * Environment variables:
- *   CASPER_RPC_URL          e.g. http://rpc.testnet.casper.network:7777/rpc
+ *   CASPER_RPC_URL          e.g. https://rpc.testnet.casper.network/rpc
  *   CASPER_NETWORK_NAME     e.g. casper-test
  *   CASPER_CHAIN_NAME       e.g. casper-test  (legacy name)
  *   CONTRACT_AGENT_REGISTRY  hash of deployed AgentRegistry contract
@@ -26,17 +26,46 @@
  *   CONTRACT_CARBON_GUARD    hash of deployed CarbonGuard
  *
  * If contracts aren't deployed yet, calls fall back to simulation mode.
+ *
+ * NOTE on SDK compatibility: this file targets casper-js-sdk@5.0.12 exactly.
+ * Earlier versions used a different API (e.g. `CLValue.newU512`, `Deploy`
+ * constructor with 3 args, `Args.fromBytes(...).insert(...)` chaining). All
+ * of those have been replaced with the v5 equivalents:
+ *   - `CLValue.newU512(x)`        → `CLValue.newCLUInt512(x)`
+ *   - `CLValue.newU256(x)`        → `CLValue.newCLUInt256(x)`
+ *   - `CLValue.newString(x)`      → `CLValue.newCLString(x)`
+ *   - `CLValue.newBool(x)`        → `CLValue.newCLValueBool(x)`
+ *   - `CLValue.newOption(x)`      → `CLValue.newCLOption(x)`
+ *   - `CLValue.newU64(x)`         → `CLValue.newCLUInt64(x)`
+ *   - `CLValue.newU32(x)`         → `CLValue.newCLUInt32(x)`
+ *   - `CLValue.newPublicKey(pk)`  → `CLValue.newCLPublicKey(pk)`
+ *   - `Args.fromBytes(empty).insert(...)` (chainable, returned Args)
+ *                                 → `new Args()` + standalone `.insert(...)` (returns void)
+ *   - `new Deploy(header, payment, session)` (3-arg)
+ *                                 → `Deploy.makeDeploy(header, payment, session)`
+ *   - `new DeployHeader(account, ttl, deps, chainName)` (old order)
+ *                                 → `new DeployHeader(chainName, deps, gasPrice, timestamp, ttl, account)`
+ *   - `deploy.toJson()`           → `Deploy.toJSON(deploy)`
+ *   - `ExecutableDeployItem.newStoredContractByHash(...)` (didn't exist)
+ *                                 → `new StoredContractByHash(...)` wrapped in `new ExecutableDeployItem()`
+ *   - `ExecutableDeployItem.newTransfer(args)` (didn't exist)
+ *                                 → `TransferDeployItem.newTransfer(amount, target, sourcePurse?, id?)` wrapped
+ *   - manual payment `newModuleBytes(empty, {amount: U512})`
+ *                                 → `ExecutableDeployItem.standardPayment(amount)` (canonical)
  */
 
 import {
-  Deploy,
-  DeployHeader,
-  ExecutableDeployItem,
   Args,
   CLValue,
-  DEFAULT_DEPLOY_TTL,
+  ContractHash,
+  Deploy,
+  DeployHeader,
+  Duration,
+  ExecutableDeployItem,
   PublicKey,
-  U512,
+  StoredContractByHash,
+  Timestamp,
+  TransferDeployItem,
 } from "casper-js-sdk"
 
 // =========================================================================
@@ -46,11 +75,11 @@ import {
 export interface DeployParams {
   /** Caller's public key hex (starts with 01/02 for ed25519/secp256k1) */
   publicKey: string
-  /** Payment in motes (1 CSPR = 1e9 motes). Default: 1 CSPR */
+  /** Payment in motes (1 CSPR = 1e9 motes). Default: 3 CSPR. */
   paymentMotes?: string
-  /** TTL in ms. Default: 30min */
+  /** TTL in ms. Default: 30min. */
   ttlMs?: number
-  /** Chain name (network name). Default: from env or 'casper-test' */
+  /** Chain name (network name). Default: from env or 'casper-test'. */
   chainName?: string
 }
 
@@ -79,6 +108,9 @@ export interface SignedDeployResult {
 const RPC_URL = process.env.CASPER_RPC_URL ?? "https://rpc.testnet.casper.network/rpc"
 const NETWORK_NAME = process.env.CASPER_NETWORK_NAME ?? process.env.CASPER_CHAIN_NAME ?? "casper-test"
 
+// Default TTL: 30 minutes (Casper testnet cap is 1 day).
+const DEFAULT_DEPLOY_TTL_MS = 30 * 60 * 1000
+
 const CONTRACT_HASHES: Record<string, string | undefined> = {
   agent_registry: process.env.CONTRACT_AGENT_REGISTRY,
   insurance: process.env.CONTRACT_INSURANCE,
@@ -105,6 +137,10 @@ export function getContractHash(module: string): string | null {
  * Build an unsigned Deploy that calls an entry point on a stored contract
  * (by contract hash). Returns the Deploy object + its JSON form for the
  * wallet extension's `signDeploy()` method.
+ *
+ * `contractHash` must be the hex form (with or without `hash-` prefix)
+ * of the deployed contract's hash, e.g. `hash-abcdef...` or `abcdef...`.
+ * Use `getContractHash(module)` to look it up by module name.
  */
 export function buildContractCallDeploy(
   params: DeployParams,
@@ -112,57 +148,59 @@ export function buildContractCallDeploy(
   entryPoint: string,
   args: Record<string, unknown>,
 ): BuildDeployResult {
-  const publicKey = PublicKey.fromHex(params.publicKey)
+  const account = PublicKey.fromHex(params.publicKey)
 
-  // Build runtime args
-  const runtimeArgs = Args.fromBytes(Uint8Array.from([]))
+  // Build runtime args. SDK 5.0.12's Args.insert returns void, so we
+  // can't chain — construct the Args instance first, then insert one-by-one.
+  const runtimeArgs = new Args(new Map())
   for (const [key, value] of Object.entries(args)) {
     runtimeArgs.insert(key, toCLValue(value))
   }
 
-  // Session: stored contract by hash
-  const session = ExecutableDeployItem.newModuleBytes(
-    new Uint8Array(0), // empty module bytes — using stored contract
-    runtimeArgs,
-  )
+  // Session: stored contract by hash. SDK 5.0.12 has no
+  // `ExecutableDeployItem.newStoredContractByHash` static — construct the
+  // inner object then wrap it in an ExecutableDeployItem.
+  const cleanHash = contractHash.replace(/^hash-/, "")
+  const contractHashObj = ContractHash.newContract(cleanHash)
+  const storedSession = new StoredContractByHash(contractHashObj, entryPoint, runtimeArgs)
+  const session = new ExecutableDeployItem()
+  session.storedContractByHash = storedSession
 
-  // Actually for calling a stored contract by hash, we use:
-  // ExecutableDeployItem.newStoredContractByHash(contractHashBytes, entryPoint, args)
-  const contractHashBytes = hexToBytes(contractHash.replace(/^hash_/, ""))
-  const storedSession = ExecutableDeployItem.newStoredContractByHash(
-    contractHashBytes,
-    entryPoint,
-    runtimeArgs,
-  )
+  // Payment: 3 CSPR default. SDK 5.0.12 has a canonical helper
+  // `ExecutableDeployItem.standardPayment(amount)` which produces the
+  // correct ModuleBytes + Args({amount: U512}) structure expected by
+  // Casper's system::handle_payment. (Manual construction with
+  // `newModuleBytes(empty, {amount: CLValue.newCLUInt256(...)})` is WRONG —
+  // it tags `amount` as U256, which Casper rejects with
+  // "type mismatch: expected U512, got U256".)
+  const paymentMotes = params.paymentMotes ?? "3000000000" // 3 CSPR
+  const payment = ExecutableDeployItem.standardPayment(paymentMotes)
 
-  // Payment: fixed 1 CSPR (configurable)
-  const paymentMotes = params.paymentMotes ?? "1000000000" // 1 CSPR
-  const payment = ExecutableDeployItem.newModuleBytes(
-    new Uint8Array(0),
-    Args.fromBytes(Uint8Array.from([])).insert(
-      "amount",
-      CLValue.newU256(U512.from(paymentMotes)),
-    ),
-  )
-
+  // Header: SDK 5.0.12 DeployHeader constructor order is
+  //   (chainName, dependencies, gasPrice, timestamp, ttl, account, bodyHash)
+  // — NOT the old (account, ttl, deps, chainName) order.
   const header = new DeployHeader(
-    publicKey,
-    params.ttlMs ?? DEFAULT_DEPLOY_TTL,
-    [], // dependencies
-    NETWORK_NAME,
+    params.chainName ?? NETWORK_NAME,  // chainName
+    [],                                 // dependencies
+    1,                                  // gasPrice (testnet standard)
+    new Timestamp(new Date()),          // timestamp
+    new Duration(params.ttlMs ?? DEFAULT_DEPLOY_TTL_MS),  // ttl
+    account,                            // account
   )
 
-  const deploy = new Deploy(header, payment, storedSession)
+  const deploy = Deploy.makeDeploy(header, payment, session)
 
   return {
     deploy,
-    deployJson: deploy.toJson(),
+    // Deploy.toJSON is a static method in SDK 5.0.12 (not an instance method).
+    deployJson: Deploy.toJSON(deploy),
   }
 }
 
-/**
- * Build a simple native CSPR transfer deploy (for x402-style payments).
- */
+// =========================================================================
+// Build a simple native CSPR transfer deploy (for x402-style payments).
+// =========================================================================
+
 export function buildTransferDeploy(
   params: DeployParams,
   toPublicKeyHex: string,
@@ -172,36 +210,35 @@ export function buildTransferDeploy(
   const fromKey = PublicKey.fromHex(params.publicKey)
   const toKey = PublicKey.fromHex(toPublicKeyHex)
 
-  const args = Args.fromBytes(Uint8Array.from([]))
-    .insert("amount", CLValue.newU512(U512.from(amountMotes)))
-    .insert("target", CLValue.newPublicKey(toKey))
-    .insert(
-      "id",
-      CLValue.newOption(CLValue.newU64(BigInt(transferId ?? "0"))),
-    )
-
-  const session = ExecutableDeployItem.newTransfer(args)
-
-  const paymentMotes = params.paymentMotes ?? "1000000000"
-  const payment = ExecutableDeployItem.newModuleBytes(
-    new Uint8Array(0),
-    Args.fromBytes(Uint8Array.from([])).insert(
-      "amount",
-      CLValue.newU256(U512.from(paymentMotes)),
-    ),
+  // SDK 5.0.12: TransferDeployItem.newTransfer(amount, target, sourcePurse?, id?)
+  // returns a TransferDeployItem. Wrap it in an ExecutableDeployItem for the
+  // session field.
+  const transferItem = TransferDeployItem.newTransfer(
+    amountMotes,
+    toKey,
+    null,           // sourcePurse — null = use account's main purse
+    transferId ?? "0",
   )
+  const session = new ExecutableDeployItem()
+  session.transfer = transferItem
+
+  // Same standardPayment fix as buildContractCallDeploy.
+  const paymentMotes = params.paymentMotes ?? "3000000000" // 3 CSPR
+  const payment = ExecutableDeployItem.standardPayment(paymentMotes)
 
   const header = new DeployHeader(
-    fromKey,
-    params.ttlMs ?? DEFAULT_DEPLOY_TTL,
+    params.chainName ?? NETWORK_NAME,
     [],
-    NETWORK_NAME,
+    1,
+    new Timestamp(new Date()),
+    new Duration(params.ttlMs ?? DEFAULT_DEPLOY_TTL_MS),
+    fromKey,
   )
 
-  const deploy = new Deploy(header, payment, session)
+  const deploy = Deploy.makeDeploy(header, payment, session)
   return {
     deploy,
-    deployJson: deploy.toJson(),
+    deployJson: Deploy.toJSON(deploy),
   }
 }
 
@@ -240,28 +277,20 @@ export async function signDeployWithWallet(
 // Helpers
 // =========================================================================
 
-function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith("0x") ? hex.slice(2) : hex
-  const bytes = new Uint8Array(clean.length / 2)
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16)
-  }
-  return bytes
-}
-
 function toCLValue(value: unknown): CLValue {
-  if (typeof value === "string") return CLValue.newString(value as string)
+  if (typeof value === "string") return CLValue.newCLString(value)
   if (typeof value === "number") {
     if (Number.isInteger(value)) {
-      if (value >= 0 && value <= 4294967295) return CLValue.newU32(value)
-      return CLValue.newU256(U512.from(value.toString()))
+      if (value >= 0 && value <= 4294967295) return CLValue.newCLUInt32(value)
+      return CLValue.newCLUInt256(value.toString())
     }
     // For floats, encode as string and let the contract parse
-    return CLValue.newString(value.toString())
+    return CLValue.newCLString(value.toString())
   }
-  if (typeof value === "boolean") return CLValue.newBool(value as boolean)
-  if (value instanceof U512) return CLValue.newU512(value)
-  if (typeof value === "bigint") return CLValue.newU256(U512.from(value.toString()))
+  if (typeof value === "boolean") return CLValue.newCLValueBool(value)
+  if (typeof value === "bigint") return CLValue.newCLUInt512(value.toString())
+  // CLValue is opaque here — if the caller already has a CLValue, pass it through.
+  if (value instanceof CLValue) return value
   throw new Error(`Unsupported CL value type: ${typeof value}`)
 }
 

@@ -39,8 +39,8 @@ export async function POST(req: Request) {
     if (RPC_URL) {
       try {
         // Lazy-import the SDK only when needed (and only on the server)
-        const { RpcClient, Deploy } = await import("casper-js-sdk")
-        const client = new RpcClient(RPC_URL)
+        const { RpcClient, Deploy, HttpHandler } = await import("casper-js-sdk")
+        const client = new RpcClient(new HttpHandler(RPC_URL))
         // Reconstruct Deploy from the signed JSON returned by the wallet
         const deploy = Deploy.fromJSON(body.signedDeploy as never)
         const result = await client.putDeploy(deploy)

@@ -24,8 +24,8 @@ export async function GET(
     // Try RPC first if configured
     if (RPC_URL) {
       try {
-        const { RpcClient } = await import("casper-js-sdk")
-        const client = new RpcClient(RPC_URL)
+        const { RpcClient, HttpHandler } = await import("casper-js-sdk")
+        const client = new RpcClient(new HttpHandler(RPC_URL))
         const info = await client.getDeploy(hash)
         if (info) {
           return ok({

@@ -144,7 +144,11 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     blockTimeMs: 16_000,
     currencySymbol: "CSPR",
     explorerUrl: "https://testnet.cspr.live",
-    eventsUrl: "https://events.testnet.casper.network",
+    // SSE event stream endpoint. Must be the FULL path — Odra's livenet-env
+    // does an HTTP GET on this URL as-is (no auto-append of /events/main).
+    // See odra-casper/rpc-client/src/casper_client/transaction_watcher/mod.rs.
+    // Casper testnet serves SSE at /events/main (main chain) or /events/side.
+    eventsUrl: "https://events.testnet.casper.network/events/main",
   },
   mainnet: {
     name: "casper",
@@ -153,7 +157,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     blockTimeMs: 32_000,
     currencySymbol: "CSPR",
     explorerUrl: "https://cspr.live",
-    eventsUrl: "https://events.casper.network",
+    eventsUrl: "https://events.casper.network/events/main",
   },
 }
 

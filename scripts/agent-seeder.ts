@@ -93,10 +93,15 @@ async function seedAgentsOnChain(
   let registered = 0
   let failed = 0
 
-  // In production, this would build + sign + broadcast a Deploy calling
-  // AgentRegistry::register_agent for each agent. Here we log the intent.
+  // ⚠️ STUB: this function does NOT actually broadcast a deploy to Casper.
+  // It only logs the intent. The AgentRegistry contract on testnet will have
+  // ZERO agents after deploy. To register agents on-chain, either:
+  //   (a) call `register_agent` from the frontend AgentSquare UI after deploy, or
+  //   (b) implement server-side signing here using casper-js-sdk's Deploy +
+  //       SecretKey + RpcClient.putDeploy (requires CASPER_SECRET_KEY_PATH).
+  // Tracking issue: this is a known limitation, not a deploy blocker.
   for (const agent of agents) {
-    logger.detail(`  On-chain: register_agent(${agent.name}, ${agent.role}, ${agent.pricePerRequest} CSPR) → ${agentRegistryHash}`)
+    logger.detail(`  [STUB — not broadcast] register_agent(${agent.name}, ${agent.role}, ${agent.pricePerRequest} CSPR) → ${agentRegistryHash}`)
     // Simulate success
     registered++
   }
@@ -123,7 +128,9 @@ async function authorizeMonitors(
     if (dryRun) {
       logger.detail(`  [dry-run] authorize_monitor(${addr.slice(0, 10)}…) → ${insuranceHash}`)
     } else {
-      logger.detail(`  On-chain: authorize_monitor(${addr.slice(0, 10)}…) → ${insuranceHash}`)
+      // ⚠️ STUB: not actually broadcast. Use the Aegis UI or implement
+      // server-side signing to call `authorize_monitor` on-chain.
+      logger.detail(`  [STUB — not broadcast] authorize_monitor(${addr.slice(0, 10)}…) → ${insuranceHash}`)
     }
     authorized++
   }
@@ -145,7 +152,9 @@ async function authorizeVerifiers(
     if (dryRun) {
       logger.detail(`  [dry-run] set_verifier(${addr.slice(0, 10)}…) → ${carbonHash}`)
     } else {
-      logger.detail(`  On-chain: set_verifier(${addr.slice(0, 10)}…) → ${carbonHash}`)
+      // ⚠️ STUB: not actually broadcast. Use the CarbonGuard UI or implement
+      // server-side signing to call `set_verifier` on-chain.
+      logger.detail(`  [STUB — not broadcast] set_verifier(${addr.slice(0, 10)}…) → ${carbonHash}`)
     }
     authorized++
   }
@@ -171,7 +180,9 @@ async function addSwarmAgents(
     if (dryRun) {
       logger.detail(`  [dry-run] add_swarm_agent(${agent.addr.slice(0, 10)}…, ${agent.role}, rep=${agent.reputation}) → ${treasuryHash}`)
     } else {
-      logger.detail(`  On-chain: add_swarm_agent(${agent.addr.slice(0, 10)}…, ${agent.role}, rep=${agent.reputation}) → ${treasuryHash}`)
+      // ⚠️ STUB: not actually broadcast. Use the SwarmTreasury UI or implement
+      // server-side signing to call `add_swarm_agent` on-chain.
+      logger.detail(`  [STUB — not broadcast] add_swarm_agent(${agent.addr.slice(0, 10)}…, ${agent.role}, rep=${agent.reputation}) → ${treasuryHash}`)
     }
     added++
   }

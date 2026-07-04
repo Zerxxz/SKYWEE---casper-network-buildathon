@@ -4,6 +4,7 @@ import * as React from "react"
 import { useWallet } from "./wallet"
 import {
   buildContractCallDeploy,
+  getContractHash,
   isDemoWallet,
   signDeployWithWallet,
   type DeployParams,
@@ -68,13 +69,29 @@ export function useDeploySubmit() {
         try {
           const deployParams: DeployParams = {
             publicKey,
-            paymentMotes: "1000000000", // 1 CSPR
+            // 3 CSPR default — covers heavier entry points like
+            // `register_agent` (writes 4 named keys + emits event)
+            // and `add_swarm_agent` without sporadic GasLimit failures.
+            paymentMotes: "3000000000",
+          }
+
+          // Resolve the deployed contract hash for this module.
+          // opts.module is a string literal like "agent_registry";
+          // buildContractCallDeploy needs the actual hex contract hash
+          // (read from process.env.CONTRACT_AGENT_REGISTRY etc.).
+          const contractHash = getContractHash(opts.module)
+          if (!contractHash) {
+            throw new Error(
+              `No contract hash configured for module '${opts.module}'. ` +
+              `Run 'bun run scripts/deploy.ts' to deploy contracts and ` +
+              `populate CONTRACT_* env vars first.`,
+            )
           }
 
           // Build the unsigned deploy
           const { deployJson } = buildContractCallDeploy(
             deployParams,
-            opts.module,
+            contractHash,
             opts.entryPoint,
             opts.args,
           )

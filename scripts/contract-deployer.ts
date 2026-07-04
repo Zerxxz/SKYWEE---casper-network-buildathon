@@ -367,7 +367,8 @@ export async function deployContracts(opts: DeployOptions): Promise<DeployResult
     // Parse contract hashes from livenet output
     const hashes = parseLivenetOutput(deployResult.output)
     for (const spec of CONTRACTS) {
-      const hash = hashes[spec.name] || hashes[Object.keys(hashes).find(k => k.toLowerCase().includes(spec.name.toLowerCase().replace("contract", "")))] || null
+      const altKey = Object.keys(hashes).find(k => k.toLowerCase().includes(spec.name.toLowerCase().replace("contract", "")))
+      const hash = hashes[spec.name] || (altKey ? hashes[altKey] : null) || null
       if (hash) {
         logger.success(`  ${spec.name} → ${hash}`)
       } else {

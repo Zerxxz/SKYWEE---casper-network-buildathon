@@ -4,8 +4,21 @@
 //!   export ODRA_CASPER_LIVENET_SECRET_KEY_PATH=~/.casper/testnet/secret_key.pem
 //!   export ODRA_CASPER_LIVENET_NODE_ADDRESS=https://rpc.testnet.casper.network/rpc
 //!   export ODRA_CASPER_LIVENET_CHAIN_NAME=casper-test
-//!   export ODRA_CASPER_LIVENET_EVENTS_URL=https://events.testnet.casper.network
+//!   export ODRA_CASPER_LIVENET_EVENTS_URL=https://events.testnet.casper.network/events/main
 //!   cargo run --bin deploy_skywee --features livenet --release
+//!
+//! GAS BUDGET NOTES:
+//!   - `env.set_gas(N)` sets the deploy's `payment_amount` to N motes
+//!     (with `standard_payment: true`, see odra-casper/rpc-client transactions.rs).
+//!   - Casper DEDUCTS THE FULL N UPFRONT at submission; unused is refunded
+//!     after execution in the same block.
+//!   - Actual gas consumed by a 200 KB Odra contract install on Casper testnet
+//!     is ~2.5-4 CSPR. We set 10 CSPR per contract = ~3x headroom.
+//!   - Total upfront for 5 contracts: 50 CSPR. The testnet faucet dispenses
+//!     ~75 CSPR/day, so a fresh account can deploy in one shot.
+//!   - DO NOT bump this back to 300 CSPR (the previous value) — that required
+//!     1500 CSPR upfront, which exceeded faucet allocation and caused
+//!     `InsufficientFunds` errors at put_deploy time.
 
 use odra::casper_types::U512;
 use odra::host::{Deployer, HostEnv, NoArgs};
@@ -21,17 +34,17 @@ fn main() {
     println!("🚀 Deploying SKYWEE contracts to Casper livenet...\n");
 
     // 1) AgentRegistry — init() tanpa argumen
-    env.set_gas(300_000_000_000u64);
+    env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
     let agent_registry = AgentRegistry::deploy(&env, NoArgs);
     println!("AgentRegistry  : {:?}", agent_registry.address());
 
     // 2) InsuranceContract — init() tanpa argumen
-    env.set_gas(300_000_000_000u64);
+    env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
     let insurance = InsuranceContract::deploy(&env, NoArgs);
     println!("Insurance      : {:?}", insurance.address());
 
     // 3) TreasuryContract — init(auto_execute_threshold: U512)
-    env.set_gas(300_000_000_000u64);
+    env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
     let treasury = TreasuryContract::deploy(
         &env,
         TreasuryContractInitArgs {
@@ -41,12 +54,12 @@ fn main() {
     println!("Treasury       : {:?}", treasury.address());
 
     // 4) RwaVault — init() tanpa argumen
-    env.set_gas(300_000_000_000u64);
+    env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
     let rwa_vault = RwaVault::deploy(&env, NoArgs);
     println!("RwaVault       : {:?}", rwa_vault.address());
 
     // 5) CarbonGuard — init() tanpa argumen
-    env.set_gas(300_000_000_000u64);
+    env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
     let carbon_guard = CarbonGuard::deploy(&env, NoArgs);
     println!("CarbonGuard    : {:?}", carbon_guard.address());
 
