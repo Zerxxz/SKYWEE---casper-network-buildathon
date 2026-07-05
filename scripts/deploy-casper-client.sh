@@ -49,10 +49,11 @@ KEY_PATH=""
 NODE_URL=""
 CHAIN_NAME=""
 PAYMENT_MOTES=10000000000   # 10 CSPR per contract — matches deploy.rs
-TTL_SECONDS=1800            # 30 minutes
+TTL_SECONDS=1800            # 30 minutes (will be passed to casper-client as '30min')
 POLL_INTERVAL=16            # Casper testnet block time ~16s
 POLL_MAX=60                 # 60 * 16s = 16 min max wait per deploy
 DRY_RUN=false
+CSPR_CLOUD_TOKEN=""          # Bearer token for cspr.cloud proxy
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONTRACTS_DIR="$REPO_ROOT/contracts/odra"
@@ -85,6 +86,10 @@ OPTIONS:
   --ttl <SECONDS>      Deploy TTL in seconds (default: 1800 = 30min)
   --poll-interval <S>  Poll interval for get-deploy (default: 16s)
   --poll-max <N>       Max poll attempts per deploy (default: 60)
+  --cspr-cloud-token <T>  Bearer token for cspr.cloud RPC proxy. Required for
+                       testnet/mainnet since mid-2026 (legacy RPC URLs are
+                       NXDOMAIN). Get one at https://cspr.cloud (Account → API Tokens).
+                       Can also be set via CSPR_CLOUD_AUTH_TOKEN env var.
   --dry-run            Print commands but don't submit
   -h, --help           Show this help
 
@@ -102,31 +107,39 @@ EOF
 # ----------------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --network)        NETWORK="$2"; shift 2 ;;
-    --key)            KEY_PATH="$2"; shift 2 ;;
-    --node-url)       NODE_URL="$2"; shift 2 ;;
-    --chain-name)     CHAIN_NAME="$2"; shift 2 ;;
-    --payment)        PAYMENT_MOTES="$2"; shift 2 ;;
-    --ttl)            TTL_SECONDS="$2"; shift 2 ;;
-    --poll-interval)  POLL_INTERVAL="$2"; shift 2 ;;
-    --poll-max)       POLL_MAX="$2"; shift 2 ;;
-    --dry-run)        DRY_RUN=true; shift ;;
-    -h|--help)        print_help; exit 0 ;;
+    --network)          NETWORK="$2"; shift 2 ;;
+    --key)              KEY_PATH="$2"; shift 2 ;;
+    --node-url)         NODE_URL="$2"; shift 2 ;;
+    --chain-name)       CHAIN_NAME="$2"; shift 2 ;;
+    --payment)          PAYMENT_MOTES="$2"; shift 2 ;;
+    --ttl)              TTL_SECONDS="$2"; shift 2 ;;
+    --poll-interval)    POLL_INTERVAL="$2"; shift 2 ;;
+    --poll-max)         POLL_MAX="$2"; shift 2 ;;
+    --cspr-cloud-token) CSPR_CLOUD_TOKEN="$2"; shift 2 ;;
+    --dry-run)          DRY_RUN=true; shift ;;
+    -h|--help)          print_help; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; echo "Run with --help for usage." >&2; exit 1 ;;
   esac
 done
+
+# Fallback: read token from env var if not passed via flag
+if [[ -z "$CSPR_CLOUD_TOKEN" ]]; then
+  CSPR_CLOUD_TOKEN="${CSPR_CLOUD_AUTH_TOKEN:-${SKYWEE_CASPER_RPC_TOKEN:-}}"
+fi
 
 # ----------------------------------------------------------------------------
 # Resolve network defaults
 # ----------------------------------------------------------------------------
 case "$NETWORK" in
   testnet)
-    NODE_URL="${NODE_URL:-https://rpc.testnet.casper.network:7777}"
+    # As of mid-2026, legacy rpc.testnet.casper.network is NXDOMAIN.
+    # CSPR.cloud is the canonical RPC proxy now (requires Bearer auth).
+    NODE_URL="${NODE_URL:-https://node.testnet.cspr.cloud/rpc}"
     CHAIN_NAME="${CHAIN_NAME:-casper-test}"
     EXPLORER="https://testnet.cspr.live"
     ;;
   mainnet)
-    NODE_URL="${NODE_URL:-https://rpc.mainnet.casper.network:7777}"
+    NODE_URL="${NODE_URL:-https://node.cspr.cloud/rpc}"
     CHAIN_NAME="${CHAIN_NAME:-casper}"
     EXPLORER="https://cspr.live"
     ;;
@@ -136,6 +149,17 @@ case "$NETWORK" in
     exit 1
     ;;
 esac
+
+# Convert TTL_SECONDS (integer) to humantime format expected by casper-client.
+# casper-client uses humantime::parse_duration, which expects strings like
+# '30min' or '1hr 12min' — NOT bare integers like '1800'.
+# See casper-client-rs/src/deploy/creation_common.rs:ARG_DEFAULT = "30min".
+if [[ "$TTL_SECONDS" =~ ^[0-9]+$ ]]; then
+  TTL_HUMAN="${TTL_SECONDS}sec"
+else
+  # User passed a humantime string directly (--ttl '30min')
+  TTL_HUMAN="$TTL_SECONDS"
+fi
 
 # ----------------------------------------------------------------------------
 # Log helpers
@@ -162,6 +186,23 @@ if ! command -v casper-client >/dev/null 2>&1; then
   exit 1
 fi
 log_success "casper-client found: $(casper-client --version 2>&1 | head -1)"
+
+# Validate CSPR.cloud token (required for testnet/mainnet since mid-2026)
+if [[ -z "$CSPR_CLOUD_TOKEN" ]]; then
+  log_error "CSPR.cloud auth token is required."
+  echo "" >&2
+  echo "As of mid-2026, Casper testnet RPC requires Bearer auth." >&2
+  echo "Get a token at https://cspr.cloud (sign in → Account → API Tokens)." >&2
+  echo "" >&2
+  echo "Then either:" >&2
+  echo "  export CSPR_CLOUD_AUTH_TOKEN=<your_token>" >&2
+  echo "  bash $0 --network testnet --key ~/.casper/testnet/secret_key.pem" >&2
+  echo "" >&2
+  echo "OR pass via flag:" >&2
+  echo "  bash $0 --network testnet --key ~/.k.pem --cspr-cloud-token <your_token>" >&2
+  exit 1
+fi
+log_success "CSPR.cloud auth token set (length: ${#CSPR_CLOUD_TOKEN})"
 
 if [[ -z "$KEY_PATH" ]]; then
   log_error "--key is required (path to secret_key.pem)"
@@ -203,6 +244,29 @@ log_dim "Payment:       $PAYMENT_MOTES motes ($((PAYMENT_MOTES / 1000000000)) CS
 log_dim "TTL:           ${TTL_SECONDS}s"
 log_dim "Dry run:       $DRY_RUN"
 echo ""
+
+# Determine effective node URL (shared by submit_deploy and wait_and_extract_hash).
+# If pointing at cspr.cloud (which requires Bearer auth), route through the
+# local auth proxy on 127.0.0.1:7778. casper-client CLI v5+ has no --header
+# flag, so we need the proxy. See scripts/cspr-auth-proxy.py.
+EFFECTIVE_NODE_URL="$NODE_URL"
+if [[ "$NODE_URL" == https://node.testnet.cspr.cloud* ]] || \
+   [[ "$NODE_URL" == https://node.cspr.cloud* ]]; then
+  EFFECTIVE_NODE_URL="http://127.0.0.1:7778/rpc"
+  if ! $DRY_RUN; then
+    if ! curl -s --max-time 2 http://127.0.0.1:7778/ >/dev/null 2>&1; then
+      log_error "cspr-auth-proxy.py is not running on 127.0.0.1:7778."
+      echo "" >&2
+      echo "CSPR.cloud requires Bearer auth, but casper-client CLI doesn't support" >&2
+      echo "custom headers. Start the auth proxy in another terminal first:" >&2
+      echo "" >&2
+      echo "  CSPR_PROXY_TOKEN=$CSPR_CLOUD_TOKEN python3 scripts/cspr-auth-proxy.py &" >&2
+      echo "" >&2
+      echo "Then re-run this script." >&2
+      exit 1
+    fi
+  fi
+fi
 
 # ============================================================================
 # Contract deploy definitions
@@ -248,12 +312,13 @@ submit_deploy() {
 
   if $DRY_RUN; then
     echo "[dry-run] casper-client put-deploy \\" >&2
-    echo "  --node-address $NODE_URL \\" >&2
+    echo "  --node-address $EFFECTIVE_NODE_URL \\" >&2
     echo "  --chain-name $CHAIN_NAME \\" >&2
     echo "  --secret-key $KEY_PATH \\" >&2
     echo "  --session-path $wasm_path \\" >&2
     echo "  --payment-amount $PAYMENT_MOTES \\" >&2
-    echo "  --ttl $TTL_SECONDS ${session_args[*]:-}" >&2
+    echo "  --ttl $TTL_HUMAN ${session_args[*]:-}" >&2
+    echo "  (Authorization: Bearer <token> injected by cspr-auth-proxy.py on :7778)" >&2
     echo "dry-run-deploy-hash-$(date +%s%N | tail -c 16)"
     return 0
   fi
@@ -261,12 +326,12 @@ submit_deploy() {
   # Submit deploy; capture combined output
   local raw_output
   raw_output=$(casper-client put-deploy \
-    --node-address "$NODE_URL" \
+    --node-address "$EFFECTIVE_NODE_URL" \
     --chain-name "$CHAIN_NAME" \
     --secret-key "$KEY_PATH" \
     --session-path "$wasm_path" \
     --payment-amount "$PAYMENT_MOTES" \
-    --ttl "$TTL_SECONDS" \
+    --ttl "$TTL_HUMAN" \
     "${session_args[@]:-}" 2>&1)
 
   # casper-client prints JSON like: { "deploy_hash": "abc123...", "hash": "..." }
@@ -308,7 +373,7 @@ wait_and_extract_hash() {
     sleep "$POLL_INTERVAL"
     result_json=$(casper-client get-deploy \
       --deploy-hash "$deploy_hash" \
-      --node-address "$NODE_URL" 2>&1 || echo "")
+      --node-address "$EFFECTIVE_NODE_URL" 2>&1 || echo "")
 
     # Check if execution_results is non-empty
     has_result=$(echo "$result_json" | python3 -c "

@@ -236,13 +236,22 @@ function deployAllLivenet(opts: DeployOptions): { success: boolean; output: stri
   // `deploy.rs` binary that depends on `odra-casper-livenet-env` directly.
   // The binary reads env vars: ODRA_CASPER_LIVENET_SECRET_KEY_PATH,
   // ODRA_CASPER_LIVENET_NODE_ADDRESS, ODRA_CASPER_LIVENET_CHAIN_NAME,
-  // ODRA_CASPER_LIVENET_EVENTS_URL (SSE event stream URL).
+  // ODRA_CASPER_LIVENET_EVENTS_URL (SSE event stream URL),
+  // CSPR_CLOUD_AUTH_TOKEN (Bearer token for cspr.cloud RPC/SSE proxy).
+  // The CSPR_CLOUD_AUTH_TOKEN is read natively by Odra's livenet-env
+  // (see odra-casper/rpc-client/src/casper_client.rs:ENV_CSPR_CLOUD_AUTH_TOKEN)
+  // and injected as `Authorization: Bearer <token>` on every RPC + SSE call.
+  // Without it, deploys to node.testnet.cspr.cloud fail with HTTP 401.
   const env = {
     ...process.env,
     ODRA_CASPER_LIVENET_SECRET_KEY_PATH: keyPath,
     ODRA_CASPER_LIVENET_NODE_ADDRESS: network.rpcUrl,
     ODRA_CASPER_LIVENET_CHAIN_NAME: network.chainName,
     ODRA_CASPER_LIVENET_EVENTS_URL: network.eventsUrl,
+    // Propagate CSPR.cloud auth token if set (under any of these env var names).
+    CSPR_CLOUD_AUTH_TOKEN: process.env.CSPR_CLOUD_AUTH_TOKEN
+      ?? process.env.SKYWEE_CASPER_RPC_TOKEN
+      ?? "",
   }
 
   logger.step("Deploying all contracts via livenet (cargo run --bin deploy_skywee --features livenet)...")

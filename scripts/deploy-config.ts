@@ -139,7 +139,17 @@ export const SEED_AGENTS: SeedAgentSpec[] = [
 export const NETWORKS: Record<string, NetworkConfig> = {
   testnet: {
     name: "casper-test",
-    rpcUrl: "https://rpc.testnet.casper.network/rpc",
+    // As of mid-2026, the Casper Association retired the legacy
+    // `rpc.testnet.casper.network` and `events.testnet.casper.network`
+    // endpoints (DNS now NXDOMAIN). The replacement is CSPR.cloud:
+    //   - RPC:  https://node.testnet.cspr.cloud/rpc     (auth required)
+    //   - SSE:  https://node-sse.testnet.cspr.cloud/events/main  (auth required)
+    // CSPR.cloud expects an `Authorization: Bearer <token>` header on every
+    // request. Odra's livenet-env natively reads CSPR_CLOUD_AUTH_TOKEN env var
+    // and adds the header automatically — no proxy needed for the Odra path.
+    // For the casper-client CLI path (no --header support), see
+    // scripts/cspr-auth-proxy.py.
+    rpcUrl: process.env.SKYWEE_CASPER_RPC_URL ?? "https://node.testnet.cspr.cloud/rpc",
     chainName: "casper-test",
     blockTimeMs: 16_000,
     currencySymbol: "CSPR",
@@ -147,17 +157,16 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     // SSE event stream endpoint. Must be the FULL path — Odra's livenet-env
     // does an HTTP GET on this URL as-is (no auto-append of /events/main).
     // See odra-casper/rpc-client/src/casper_client/transaction_watcher/mod.rs.
-    // Casper testnet serves SSE at /events/main (main chain) or /events/side.
-    eventsUrl: "https://events.testnet.casper.network/events/main",
+    eventsUrl: process.env.SKYWEE_CASPER_EVENTS_URL ?? "https://node-sse.testnet.cspr.cloud/events/main",
   },
   mainnet: {
     name: "casper",
-    rpcUrl: "https://rpc.mainnet.casper.network/rpc",
+    rpcUrl: process.env.SKYWEE_CASPER_RPC_URL ?? "https://node.cspr.cloud/rpc",
     chainName: "casper",
     blockTimeMs: 32_000,
     currencySymbol: "CSPR",
     explorerUrl: "https://cspr.live",
-    eventsUrl: "https://events.casper.network/events/main",
+    eventsUrl: process.env.SKYWEE_CASPER_EVENTS_URL ?? "https://node-sse.cspr.cloud/events/main",
   },
 }
 

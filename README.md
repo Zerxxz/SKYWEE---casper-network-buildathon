@@ -285,36 +285,54 @@ quirks, etc.), you can deploy the same 5 wasms using the official
 `casper-client` CLI instead. The contracts and wasms stay the same — only
 the deploy mechanism changes.
 
+> **⚠️ Mid-2026 infrastructure change**: As of mid-2026, the legacy
+> `rpc.testnet.casper.network` and `events.testnet.casper.network`
+> endpoints are retired (DNS NXDOMAIN). All Casper testnet RPC traffic now
+> goes through CSPR.cloud, which requires `Authorization: Bearer <token>`
+> on every request. Get a token at https://cspr.cloud
+> (sign in → Account → API Tokens).
+
 **Prerequisites:**
 
 - `casper-client` installed: `cargo install casper-client --locked` (or `apt install casper-client`)
 - The 5 `.wasm` files already built (run `cd contracts/odra && cargo odra build` once)
 - A Casper Testnet secret key PEM file with ≥50 CSPR for gas
+- A CSPR.cloud API token (free at https://cspr.cloud)
 
 **Usage:**
 
 ```bash
-# Dry run — prints the exact casper-client commands without submitting
+# Terminal 1: start the auth proxy (small Python HTTP forwarder that
+# injects the Bearer token into every request — casper-client CLI itself
+# doesn't support custom HTTP headers).
+export CSPR_PROXY_TOKEN="your_cspr_cloud_bearer_token"
+python3 scripts/cspr-auth-proxy.py
+
+# Terminal 2: dry run (prints the exact casper-client commands)
 bash scripts/deploy-casper-client.sh \
   --network testnet \
   --key ~/.casper/testnet/secret_key.pem \
+  --cspr-cloud-token your_cspr_cloud_bearer_token \
   --dry-run
 
 # Real deploy
 bash scripts/deploy-casper-client.sh \
   --network testnet \
-  --key ~/.casper/testnet/secret_key.pem
+  --key ~/.casper/testnet/secret_key.pem \
+  --cspr-cloud-token your_cspr_cloud_bearer_token
 ```
 
 **What it does (vs. the Odra path):**
 
-| Step | `bun run deploy` (Odra) | `deploy-casper-client.sh` |
+| Step | `bun run deploy` (Odra) | `deploy-casper-client.sh` (alternative) |
 |------|------------------------|--------------------------|
 | Build wasm | `cargo odra build` | Same — reuses the same `.wasm` files |
-| Submit deploy | `cargo run --bin deploy_skywee --features livenet` (uses Odra livenet-env) | `casper-client put-deploy` (5 invocations) |
+| Submit deploy | `cargo run --bin deploy_skywee --features livenet` (uses Odra livenet-env) | `casper-client put-deploy` × 5 (via auth proxy on `127.0.0.1:7778`) |
+| Auth to CSPR.cloud | Odra reads `CSPR_CLOUD_AUTH_TOKEN` env var natively | `cspr-auth-proxy.py` injects `Authorization: Bearer` header |
 | Wait for execution | SSE event stream (can hang if events URL is wrong) | Polls `get-deploy` every 16s (no SSE) |
 | Extract contract hash | Odra prints it to stdout | Parses `WriteContractPackage` transform from execution result |
 | Init args (TreasuryContract) | Hardcoded in `bin/deploy.rs` | Passed via `--session-arg "auto_execute_threshold:u512='1000000000'"` |
+| TTL format | Rust `Duration` | `humantime` format (`1800sec`, `30min`, `1hr 12min`) |
 | Output | `.skywee-deploy/` state files + `.env.local` | `.env.local.deployed` snippet (copy into `.env.local` manually) |
 
 **Trade-offs:**
@@ -322,6 +340,8 @@ bash scripts/deploy-casper-client.sh \
 - ✅ **Pro**: No nightly Rust needed to deploy (only to build wasms)
 - ✅ **Pro**: No SSE dependency — works even if events URL is unreachable
 - ✅ **Pro**: Each `casper-client` call is independently debuggable
+- ✅ **Pro**: Auth proxy is a tiny 200-line Python script — easy to inspect/modify
+- ❌ **Con**: Requires running `cspr-auth-proxy.py` in a separate terminal
 - ❌ **Con**: Doesn't run the agent seeder step (register agents via the UI after deploy)
 - ❌ **Con**: Doesn't auto-update `.env.local` — copy the snippet manually
 
