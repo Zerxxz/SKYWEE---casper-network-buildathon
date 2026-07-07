@@ -9,9 +9,6 @@
       "maxDuration": 60
     },
     "src/app/api/skywee/deploys/[hash]/route.ts": {
-      "maxDuration": 60
-    },
-    "src/app/api/skywee/deploys/[hash]/route.ts": {
       "maxDuration": 30
     }
   },
