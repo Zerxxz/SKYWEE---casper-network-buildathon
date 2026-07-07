@@ -1,0 +1,158 @@
+// SKYWEE — Prisma schema
+// Persists agent interactions, transactions, policies, proposals, RWA assets,
+// and carbon credits. The Next.js API routes simulate on-chain contract
+// interactions; in production these writes would be replaced by signed deploys
+// to the Odra contracts in /contracts/odra.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============== AgentSquare ==============
+
+model Agent {
+  id              String   @id @default(cuid())
+  onChainId       Int      @unique // matches the u32 in the Odra contract
+  name            String
+  role            String
+  ownerAddress    String
+  pricePerRequest Float    @default(0)
+  reputation      Int      @default(50)
+  requestsFulfilled Int    @default(0)
+  active          Boolean  @default(true)
+  module          String   @default("agent-square")
+  registeredBlock Int      @default(2847193)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  transactions    Transaction[]
+}
+
+// ============== Aegis (Insurance) ==============
+
+model Policy {
+  id              String   @id @default(cuid())
+  onChainId       Int      @unique
+  rwaId           String
+  rwaName         String
+  trigger         String
+  coverage        Float
+  premium         Float
+  policyholder    String
+  monitorAddress  String
+  status          String   @default("active") // active | triggered | expired
+  payoutEligible  Boolean  @default(false)
+  issuedBlock     Int      @default(2847193)
+  payoutBlock     Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  transactions    Transaction[]
+}
+
+// ============== SwarmTreasury ==============
+
+model Proposal {
+  id                String   @id @default(cuid())
+  onChainId         Int      @unique
+  title             String
+  proposedBy        String
+  proposerRole      String
+  amountCSPR        Float
+  votesFor          Float    @default(0)
+  votesAgainst      Float    @default(0)
+  deliberationRounds Int     @default(0)
+  status            String   @default("voting") // voting | executed | rejected
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  deliberations     Deliberation[]
+  transactions      Transaction[]
+}
+
+model Deliberation {
+  id          String   @id @default(cuid())
+  proposalId  String
+  proposal    Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  agentAddr   String
+  agentRole   String
+  message     String
+  round       Int      @default(1)
+  blockHeight Int
+  createdAt   DateTime @default(now())
+
+  @@index([proposalId])
+}
+
+// ============== RWA-X Vault ==============
+
+model RwaAsset {
+  id           String   @id @default(cuid())
+  onChainId    Int      @unique
+  name         String
+  category     String
+  totalValue   Float
+  tokenized    Float
+  holders      Int      @default(1)
+  apy          Float
+  ammPrice     Float    @default(1.0)
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions Transaction[]
+}
+
+// ============== CarbonGuard ==============
+
+model CarbonProject {
+  id              String   @id @default(cuid())
+  onChainId       Int      @unique
+  name            String
+  location        String
+  projectType     String
+  creditsIssued   Float
+  creditsRetired  Float    @default(0)
+  verification    String   @default("pending") // verified | pending | flagged
+  lastCheckBlock  Int      @default(2847193)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  transactions    Transaction[]
+}
+
+// ============== Shared: Activity Feed ==============
+
+model Transaction {
+  id          String   @id @default(cuid())
+  hash        String   @unique
+  module      String   // agent-square | aegis | swarm-treasury | rwa-vault | carbon-guard
+  type        String   // x402-payment | policy-issued | proposal-vote | etc.
+  agentName   String?
+  amountCSPR  Float    @default(0)
+  status      String   @default("confirmed") // confirmed | pending | failed
+  blockHeight Int
+  callerAddr  String?
+  metadata    String?  // JSON blob for additional context
+  createdAt   DateTime @default(now())
+
+  agent       Agent?   @relation(fields: [agentId], references: [id])
+  agentId     String?
+  policy      Policy?  @relation(fields: [policyId], references: [id])
+  policyId    String?
+  proposal    Proposal? @relation(fields: [proposalId], references: [id])
+  proposalId  String?
+  rwaAsset    RwaAsset? @relation(fields: [rwaAssetId], references: [id])
+  rwaAssetId  String?
+  carbonProject CarbonProject? @relation(fields: [carbonProjectId], references: [id])
+  carbonProjectId String?
+
+  @@index([module])
+  @@index([createdAt])
+  @@index([status])
+}

@@ -40,7 +40,16 @@ export async function POST(req: Request) {
       try {
         // Lazy-import the SDK only when needed (and only on the server)
         const { RpcClient, Deploy, HttpHandler } = await import("casper-js-sdk")
-        const client = new RpcClient(new HttpHandler(RPC_URL))
+        const handler = new HttpHandler(RPC_URL)
+        // CSPR.cloud requires Bearer auth on every request.
+        // HttpHandler supports custom headers via setCustomHeaders().
+        const authToken = process.env.CSPR_CLOUD_AUTH_TOKEN
+        if (authToken) {
+          handler.setCustomHeaders({
+            "Authorization": `Bearer ${authToken}`,
+          })
+        }
+        const client = new RpcClient(handler)
         // Reconstruct Deploy from the signed JSON returned by the wallet
         const deploy = Deploy.fromJSON(body.signedDeploy as never)
         const result = await client.putDeploy(deploy)

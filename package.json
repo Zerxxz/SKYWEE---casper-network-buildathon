@@ -5,8 +5,10 @@
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
+    "vercel-build": "next build",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
+    "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -16,6 +18,10 @@
     "deploy:dry-run": "bun run scripts/deploy.ts --dry-run",
     "deploy:health": "bun run scripts/deploy.ts --health-only",
     "deploy:seed-only": "bun run scripts/deploy.ts --seed-only"
+  },
+  "engines": {
+    "node": ">=18.17.0",
+    "bun": ">=1.0.0"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
