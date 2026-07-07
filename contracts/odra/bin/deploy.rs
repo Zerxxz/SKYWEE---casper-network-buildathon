@@ -61,19 +61,22 @@ fn main() {
 
     // 1) AgentRegistry — init() tanpa argumen
     println!("▶ Deploying AgentRegistry (init no args)...");
-    env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
+    env.set_gas(200_000_000_000u64); // 200 CSPR upfront — bumped from 10 CSPR
+                                    // after "Out of gas error" on 200 KB wasm.
     let agent_registry = AgentRegistry::deploy(&env, NoArgs);
     println!("✓ AgentRegistry  : {:?}", agent_registry.address());
 
     // 2) InsuranceContract — init() tanpa argumen
     println!("▶ Deploying InsuranceContract (init no args)...");
-    env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
+    env.set_gas(200_000_000_000u64); // 200 CSPR upfront — bumped from 10 CSPR
+                                    // after "Out of gas error" on 200 KB wasm.
     let insurance = InsuranceContract::deploy(&env, NoArgs);
     println!("✓ Insurance      : {:?}", insurance.address());
 
     // 3) TreasuryContract — init(auto_execute_threshold: U512)
     println!("▶ Deploying TreasuryContract (init auto_execute_threshold=1000000000)...");
-    env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
+    env.set_gas(200_000_000_000u64); // 200 CSPR upfront — bumped from 10 CSPR
+                                    // after "Out of gas error" on 200 KB wasm.
     let treasury = TreasuryContract::deploy(
         &env,
         TreasuryContractInitArgs {
@@ -84,13 +87,15 @@ fn main() {
 
     // 4) RwaVault — init() tanpa argumen
     println!("▶ Deploying RwaVault (init no args)...");
-    env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
+    env.set_gas(200_000_000_000u64); // 200 CSPR upfront — bumped from 10 CSPR
+                                    // after "Out of gas error" on 200 KB wasm.
     let rwa_vault = RwaVault::deploy(&env, NoArgs);
     println!("✓ RwaVault       : {:?}", rwa_vault.address());
 
     // 5) CarbonGuard — init() tanpa argumen
     println!("▶ Deploying CarbonGuard (init no args)...");
-    env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
+    env.set_gas(200_000_000_000u64); // 200 CSPR upfront — bumped from 10 CSPR
+                                    // after "Out of gas error" on 200 KB wasm.
     let carbon_guard = CarbonGuard::deploy(&env, NoArgs);
     println!("✓ CarbonGuard    : {:?}", carbon_guard.address());
 

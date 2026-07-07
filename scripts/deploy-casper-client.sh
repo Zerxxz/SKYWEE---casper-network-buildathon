@@ -48,7 +48,12 @@ NETWORK="testnet"
 KEY_PATH=""
 NODE_URL=""
 CHAIN_NAME=""
-PAYMENT_MOTES=10000000000   # 10 CSPR per contract — matches deploy.rs
+PAYMENT_MOTES=200000000000  # 200 CSPR per contract — bumped from 10 CSPR after seeing
+                            # "Out of gas error" on 200 KB Odra wasm installs.
+                            # Actual cost was 10 CSPR (gas-budget hit), but
+                            # contract installs need headroom for ref/unref
+                            # and contract-package creation overhead. 20x
+                            # safety is overkill but cheap on testnet.
 TTL_SECONDS=1800            # 30 minutes (will be passed to casper-client as '30min')
 POLL_INTERVAL=16            # Casper testnet block time ~16s
 POLL_MAX=60                 # 60 * 16s = 16 min max wait per deploy
@@ -326,10 +331,11 @@ submit_deploy() {
   snake_name=$(echo "$display_name" | sed -E 's/([a-z0-9])([A-Z])/\1_\2/g' | tr '[:upper:]' '[:lower:]')
 
   # 4 mandatory Odra config args (matches odra-core/src/host.rs:254-262)
-  session_args+=(--session-arg "odra_cfg_package_hash_key_name:string:'${snake_name}_package_hash'")
-  session_args+=(--session-arg "odra_cfg_allow_key_override:bool:'false'")
-  session_args+=(--session-arg "odra_cfg_is_upgradable:bool:'true'")
-  session_args+=(--session-arg "odra_cfg_is_upgrade:bool:'false'")
+  # Values need double-single-quote wrap inside the arg value
+  session_args+=(--session-arg "odra_cfg_package_hash_key_name:string=''${snake_name}_package_hash''")
+  session_args+=(--session-arg "odra_cfg_allow_key_override:bool=''false''")
+  session_args+=(--session-arg "odra_cfg_is_upgradable:bool=''true''")
+  session_args+=(--session-arg "odra_cfg_is_upgrade:bool=''false''")
 
   # User-supplied init args (e.g. auto_execute_threshold for TreasuryContract)
   if [[ -n "$session_args_str" ]]; then
@@ -365,15 +371,28 @@ submit_deploy() {
     "${session_args[@]:-}" 2>&1)
 
   # casper-client prints JSON like: { "deploy_hash": "abc123...", "hash": "..." }
-  # Extract deploy_hash field
+  # But the deprecated put-deploy wraps it in a json-rpc envelope with a
+  # WARNING banner prepended. Grep for a 64-hex deploy_hash anywhere in
+  # the output, not just the top-level JSON.
   local deploy_hash
   deploy_hash=$(echo "$raw_output" | python3 -c "
-import sys, json
+import sys, json, re
+text = sys.stdin.read()
+# 1) Try JSON parse first
 try:
-    d = json.load(sys.stdin)
-    print(d.get('deploy_hash') or d.get('hash') or '')
+    d = json.loads(text)
+    if isinstance(d, dict):
+        result = d.get('result', d)
+        if isinstance(result, dict):
+            h = result.get('deploy_hash') or result.get('hash') or ''
+            if h:
+                print(h); sys.exit(0)
 except Exception:
     pass
+# 2) Fallback: regex grep on raw output for a 64-hex string
+m = re.search(r'[0-9a-f]{64}', text)
+if m:
+    print(m.group(0)); sys.exit(0)
 " 2>/dev/null || echo "")
 
   if [[ -z "$deploy_hash" ]]; then
@@ -405,25 +424,39 @@ wait_and_extract_hash() {
       --deploy-hash "$deploy_hash" \
       --node-address "$EFFECTIVE_NODE_URL" 2>&1 || echo "")
 
-    # Check if execution_results is non-empty
+    # Casper 2.x wraps GET deploy response in an RPC envelope:
+    #   {jsonrpc, id, result: {deploy, execution_info.execution_result.Version2}}
+    # 2.x execution_result.Version2 has fields: error_message, limit,
+    # consumed, cost, refund, effects[], transfers[]. 1.x returns
+    # execution_results[] at top level. Handle both shapes.
     has_result=$(echo "$result_json" | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
-    r = d.get('execution_results', [])
-    sys.exit(0 if r else 1)
+    r = d.get('result', d)
+    if r.get('execution_results'):
+        sys.exit(0)
+    ei = r.get('execution_info', {}).get('execution_result', {})
+    if ei.get('Version2') or ei.get('Version1'):
+        sys.exit(0)
+    sys.exit(1)
 except Exception:
     sys.exit(1)
 " 2>/dev/null && echo yes || echo no)
 
     if [[ "$has_result" == "yes" ]]; then
-      # Check success/failure
+      # Empty error_message => success in Casper 2.x. 1.x uses Success/Failure keys.
       is_success=$(echo "$result_json" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
-r = d['execution_results'][0]['result']
-# Result is either {Success: ...} or {Failure: ...}
-print('yes' if 'Success' in r else 'no')
+r = d.get('result', d)
+er = r.get('execution_results', [])
+if er:
+    print('yes' if 'Success' in er[0].get('result', {}) else 'no')
+    sys.exit(0)
+ver2 = r.get('execution_info', {}).get('execution_result', {}).get('Version2') or {}
+err = ver2.get('error_message')
+print('no' if err else 'yes')
 " 2>/dev/null || echo no)
 
       if [[ "$is_success" != "yes" ]]; then
@@ -431,57 +464,67 @@ print('yes' if 'Success' in r else 'no')
         echo "$result_json" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
-r = d['execution_results'][0]['result']
-if 'Failure' in r:
-    print('Failure reason:', r['Failure'].get('error_message', 'unknown'))
-    print('Cost:', r['Failure'].get('cost', 'unknown'), 'motes')
-    print('Effect:', json.dumps(r['Failure'].get('effect', {}), indent=2)[:500])
+r = d.get('result', d)
+er = r.get('execution_results', [])
+if er:
+    f = er[0].get('result', {}).get('Failure') or {}
+    if f:
+        print('Failure reason:', f.get('error_message', 'unknown'))
+        print('Cost:', f.get('cost', 'unknown'), 'motes')
+        print('Effect:', json.dumps(f.get('effect', {}), indent=2)[:500])
+else:
+    ver2 = r.get('execution_info', {}).get('execution_result', {}).get('Version2') or {}
+    print('error_message:', (ver2.get('error_message') or '?')[:500])
+    print('cost / limit / consumed (motes):', ver2.get('cost','?'), '/', ver2.get('limit','?'), '/', ver2.get('consumed','?'))
 " >&2 || echo "$result_json" >&2
         return 1
       fi
 
       # Success — extract contract package hash from transforms
-      # A WriteContractPackage transform's key field looks like "hash-<hex>"
-      # OR for contract package: "contract-package-<hex>" (depends on Casper version).
+      # Success — extract contract package hash from transforms/effects.
+      # Casper 2.x: execution_info.execution_result.Version2.effects[]
+      #   each element has {key, kind: {Write: CLValue} | {Identity} | {Prune}}
+      # Casper 1.x: execution_results[].effect.transforms[] with transform=WriteContractPackage
       local contract_hash
       contract_hash=$(echo "$result_json" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
-transforms = (d['execution_results'][0]
-              .get('effect', {})
-              .get('transforms', []))
+r = d.get('result', d)
+# --- Casper 2.x path ---
+ver2 = r.get('execution_info', {}).get('execution_result', {}).get('Version2') or {}
+effects = ver2.get('effects') or []
+for e in effects:
+    key = e.get('key', '')
+    if key.startswith('hash-'):
+        print(key); sys.exit(0)
+# --- Casper 1.x path ---
+transforms = (r.get('execution_results', []) or [{}])[0].get('effect', {}).get('transforms', [])
 for t in transforms:
     transform = t.get('transform', '')
     key = t.get('key', '')
-    # Match either WriteContractPackage transform
     if 'WriteContractPackage' in transform:
-        # Key format: 'hash-<64 hex chars>' (contract package hash)
-        # OR: 'contract-package-wasm-<hex>' in some versions
         if key.startswith('hash-'):
-            print(key)
-            break
+            print(key); sys.exit(0)
         elif key.startswith('contract-package-'):
-            # Extract the hex part and reformat
             hex_part = key.replace('contract-package-wasm-', '').replace('contract-package-', '')
-            print(f'hash-{hex_part}')
-            break
+            print(f'hash-{hex_part}'); sys.exit(0)
 " 2>/dev/null || echo "")
 
       if [[ -z "$contract_hash" ]]; then
-        # Fallback: maybe the transform key uses a different format
-        # Try to find any transform with 'contract' in the key
+        # Fallback: any effect/transform with 'Contract' in the kind name
         contract_hash=$(echo "$result_json" | python3 -c "
-import sys, json, re
+import sys, json
 d = json.load(sys.stdin)
-transforms = (d['execution_results'][0]
-              .get('effect', {})
-              .get('transforms', []))
+r = d.get('result', d)
+ver2 = r.get('execution_info', {}).get('execution_result', {}).get('Version2') or {}
+for e in ver2.get('effects') or []:
+    k = e.get('key', '')
+    if 'Contract' in json.dumps(e.get('kind', {})) and k.startswith('hash-'):
+        print(k); sys.exit(0)
+transforms = (r.get('execution_results', []) or [{}])[0].get('effect', {}).get('transforms', [])
 for t in transforms:
-    key = t.get('key', '')
-    transform = t.get('transform', '')
-    if 'Contract' in transform and key.startswith('hash-'):
-        print(key)
-        break
+    if 'Contract' in t.get('transform','') and t.get('key','').startswith('hash-'):
+        print(t['key']); sys.exit(0)
 " 2>/dev/null || echo "")
       fi
 
