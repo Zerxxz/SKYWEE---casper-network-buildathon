@@ -1,0 +1,93 @@
+{
+  "_comment": "SKYWEE deployed contract hashes on Casper Testnet (protocol 2.2.2).",
+  "_network": "casper-test",
+  "_chain_name": "casper-test",
+  "_rpc_url": "https://node.testnet.cspr.cloud/rpc",
+  "_events_url": "https://node-sse.testnet.cspr.cloud/events/main",
+  "_explorer_url": "https://testnet.cspr.live",
+  "_deployer_public_key": "0203220e30622aee8574de059922f3d9422c73d84b8372b5926f5e3e1e84277feb43",
+  "_deployer_account_hash": "c1aa5031607fcc07a3c91f175ffd4f44c3238a11ce82905ecf6d236d777a0b20",
+  "_deployed_at": "2026-07-07T18:54:46Z (latest cluster)",
+  "_source_commit": "57d8a394fd3fc848e3bc6632235d0b33236abe8f",
+
+  "_verification_notes": [
+    "All 5 contract package hashes below were discovered by querying cspr.live",
+    "public API for contract packages deployed by the deployer account.",
+    "4 of 5 (Insurance, Treasury, RwaVault, CarbonGuard) were verified via",
+    "deploy args containing 'odra_cfg_package_hash_key_name' = '<name>_package_hash'.",
+    "",
+    "AgentRegistry could not be auto-identified because cspr.live's",
+    "/contracts/{contract_hash} endpoint (which returns entry_points) is",
+    "flaky and returned empty responses on all retry attempts.",
+    "",
+    "The AgentRegistry hash below is the OLDEST contract package deployed",
+    "by this account (17:57:05Z), which matches deploy.rs order",
+    "(AgentRegistry deploys first). PLEASE VERIFY by checking your deploy",
+    "terminal output — it should show 'AgentRegistry : hash-...' line.",
+    "",
+    "If this hash is wrong, replace it with the correct one from your",
+    "deploy output. The other 4 hashes are confirmed correct."
+  ],
+
+  "contracts": {
+    "agent_registry": {
+      "module": "agent_registry",
+      "env_var": "CONTRACT_AGENT_REGISTRY",
+      "contract_package_hash": "hash-8ddaf7548dfc4505aed7a62a3d4c3fa4936ab8797771988cc6d560eed99b3ded",
+      "deployed_at": "2026-07-07T17:57:05Z",
+      "deploy_hash": "UNKNOWN — fetch from your deploy terminal output",
+      "verified": false,
+      "_verification_status": "INFERRED from oldest deploy timestamp + deploy.rs order. PLEASE VERIFY."
+    },
+    "insurance": {
+      "module": "insurance",
+      "env_var": "CONTRACT_INSURANCE",
+      "contract_package_hash": "hash-b4d195a93712eb2f801549901756b1accb899b8f76d27bff57162ffec3d92b06",
+      "deployed_at": "2026-07-07T18:54:37Z",
+      "deploy_hash": "192737fb5e8ce57c59800a71d0223f6128b10f78ab659742eb23e706e3f2ab34",
+      "verified": true,
+      "_verification_status": "Verified via deploy args: odra_cfg_package_hash_key_name='insurance_contract_package_hash'"
+    },
+    "treasury": {
+      "module": "treasury",
+      "env_var": "CONTRACT_TREASURY",
+      "contract_package_hash": "hash-45e1049d82b95dd82119c7462f2d90a4bbf5f1978e3336cf6ba3437f7540bcee",
+      "deployed_at": "2026-07-07T18:54:40Z",
+      "deploy_hash": "84c4f6a3ec8211fb59145f12f14621821c0d09579d24125ff3c2a9bd605d7a90",
+      "verified": true,
+      "_verification_status": "Verified via deploy args: odra_cfg_package_hash_key_name='treasury_contract_package_hash'"
+    },
+    "rwa_vault": {
+      "module": "rwa_vault",
+      "env_var": "CONTRACT_RWA_VAULT",
+      "contract_package_hash": "hash-4898c97682442a9929e36b735cd645f42aa489540f07e9061f117e3f4cc50b21",
+      "deployed_at": "2026-07-07T18:54:43Z",
+      "deploy_hash": "fcc155191f416b01a1dd398712921661d045ec893cb45370f1faa4dc88c84b8a",
+      "verified": true,
+      "_verification_status": "Verified via deploy args: odra_cfg_package_hash_key_name='rwa_vault_package_hash'"
+    },
+    "carbon_guard": {
+      "module": "carbon_guard",
+      "env_var": "CONTRACT_CARBON_GUARD",
+      "contract_package_hash": "hash-3cbe0c274dd0728cf626c26aad333647b657d6ab0548aef983688271fffed63f",
+      "deployed_at": "2026-07-07T18:54:46Z",
+      "deploy_hash": "c11d28f7d21d02b23b7cc3acb9ab1e7226a3514866b5871809f8e7ede4e0a4d2",
+      "verified": true,
+      "_verification_status": "Verified via deploy args: odra_cfg_package_hash_key_name='carbon_guard_package_hash'"
+    }
+  },
+
+  "_other_contract_packages_on_account": [
+    "The deployer account has 10 total contract packages deployed.",
+    "5 are SKYWEE (above). The other 5 are older/duplicate deploys:",
+    "",
+    "  hash-400d8973a1b5f2911ce89ba6e600d412614040519ba29294a7115c41e69f36d4 — 18:51:09Z (older InsuranceContract)",
+    "  hash-9500eeb0a45db4a0259d80d6f825ce523a25e981e45baf63ce634705554ae256 — 18:34:17Z (older CarbonGuard)",
+    "  hash-231c5734f4c3890943230f4167a504e7675c14c7d8ddb51813e8a900be748652 — 18:34:14Z (older RwaVault)",
+    "  hash-457b93654b906d784287346b0227d8a6265ba508d32c08160120d656d11b1507 — 18:17:53Z (unidentified)",
+    "  hash-a295e71f212419f76336c125ab1b276f4d31a9aaa6b209f82251ac101276206b — 18:17:56Z (unidentified)",
+    "",
+    "If AgentRegistry hash above is wrong, one of these 5 may be the correct one.",
+    "Check your deploy terminal output to confirm."
+  ]
+}
