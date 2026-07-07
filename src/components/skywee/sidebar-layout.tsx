@@ -293,10 +293,14 @@ export function SidebarLayout({ active, onNavigate, children }: SidebarLayoutPro
             <div className="flex items-center gap-2.5">
               <div
                 aria-hidden
-                className="h-6 w-6 rounded bg-primary text-primary-foreground grid place-items-center font-black text-[10px] tracking-tighter"
-              >
-                S
-              </div>
+                className="h-6 w-6 rounded bg-white overflow-hidden shadow-sm flex-shrink-0"
+                style={{
+                  backgroundImage: "url(/skywee-logo-icon.jpg)",
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  backgroundRepeat: "no-repeat",
+                }}
+              />
               <span className="font-mono text-xs font-bold tracking-[0.18em]">
                 SKYWEE
               </span>
@@ -354,10 +358,14 @@ function SidebarContent({
         >
           <div
             aria-hidden
-            className="h-8 w-8 rounded-md bg-primary text-primary-foreground grid place-items-center font-black text-sm tracking-tighter group-hover:scale-105 transition-transform"
-          >
-            S
-          </div>
+            className="h-8 w-8 rounded-md bg-white overflow-hidden shadow-sm flex-shrink-0 group-hover:scale-105 transition-transform"
+            style={{
+              backgroundImage: "url(/skywee-logo-icon.jpg)",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+            }}
+          />
           <span
             className={[
               "font-mono text-sm font-bold tracking-[0.18em] whitespace-nowrap skywee-sidebar-text",
