@@ -526,3 +526,64 @@
   transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
+
+/* ====== FALLBACK: Ensure content is visible even if JS fails to hydrate ====== */
+/* ScrollReveal sets opacity:0 via inline style, then JS (IntersectionObserver)
+ * sets it to 1. If JS fails (runtime error, hydration mismatch), content stays
+ * invisible forever. This CSS animation forces opacity:1 after 3 seconds,
+ * regardless of JS state. JS-enabled users see content faster (via useEffect);
+ * JS-disabled/error users see content after 3s delay. */
+@keyframes skywee-reveal-fallback {
+  0% { opacity: 0; }
+  99% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Apply fallback to any element with inline opacity:0 (ScrollReveal, motion.div, etc.) */
+[style*="opacity:0"] {
+  animation: skywee-reveal-fallback 0.01s 3s forwards;
+}
+
+/* Also handle filter:blur and transform that ScrollReveal sets */
+[style*="filter:blur"] {
+  animation: skywee-reveal-fallback-filter 0.01s 3s forwards;
+}
+@keyframes skywee-reveal-fallback-filter {
+  to { filter: none; transform: none; }
+}
+
+/* ====== Ensure dark mode is applied even before next-themes loads ====== */
+/* next-themes injects a script in <head> to set class="dark" on <html>.
+ * But if that script fails or is blocked, the site stays in light mode.
+ * Since the default theme is "dark" (set in ThemeProvider), we add a
+ * CSS-only fallback: if <html> has no class, apply dark mode variables
+ * (the site is designed dark-first). */
+html:not(.light):not(.dark) {
+  --background: oklch(0.05 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.10 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.10 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.05 0 0);
+  --secondary: oklch(0.16 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.16 0 0);
+  --muted-foreground: oklch(0.65 0 0);
+  --accent: oklch(0.16 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.55 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.985 0 0);
+  --sidebar: oklch(0.10 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0.05 0 0);
+  --sidebar-accent: oklch(0.16 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.985 0 0);
+  color-scheme: dark;
+}
