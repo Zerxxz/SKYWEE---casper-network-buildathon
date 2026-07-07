@@ -43,17 +43,36 @@ fn main() {
 
     println!("🚀 Deploying SKYWEE contracts to Casper livenet...\n");
 
+    // Diagnostic: print environment so we can verify RPC URL, events URL, chain name
+    // are all correctly propagated. If a deploy hangs or fails, this helps narrow
+    // down which env var is missing.
+    println!("📋 Livenet environment:");
+    println!("   ODRA_CASPER_LIVENET_NODE_ADDRESS  = {}", std::env::var("ODRA_CASPER_LIVENET_NODE_ADDRESS").unwrap_or_else(|_| "<not set>".into()));
+    println!("   ODRA_CASPER_LIVENET_CHAIN_NAME    = {}", std::env::var("ODRA_CASPER_LIVENET_CHAIN_NAME").unwrap_or_else(|_| "<not set>".into()));
+    println!("   ODRA_CASPER_LIVENET_EVENTS_URL    = {}", std::env::var("ODRA_CASPER_LIVENET_EVENTS_URL").unwrap_or_else(|_| "<not set>".into()));
+    println!("   ODRA_CASPER_LIVENET_SECRET_KEY    = {}", std::env::var("ODRA_CASPER_LIVENET_SECRET_KEY_PATH").unwrap_or_else(|_| "<not set>".into()));
+    println!("   CSPR_CLOUD_AUTH_TOKEN             = {}",
+             if std::env::var("CSPR_CLOUD_AUTH_TOKEN").map(|t| !t.is_empty()).unwrap_or(false) {
+                 format!("{} chars (set)", std::env::var("CSPR_CLOUD_AUTH_TOKEN").map(|t| t.len()).unwrap_or(0))
+             } else {
+                 "<not set>".to_string()
+             });
+    println!();
+
     // 1) AgentRegistry — init() tanpa argumen
+    println!("▶ Deploying AgentRegistry (init no args)...");
     env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
     let agent_registry = AgentRegistry::deploy(&env, NoArgs);
-    println!("AgentRegistry  : {:?}", agent_registry.address());
+    println!("✓ AgentRegistry  : {:?}", agent_registry.address());
 
     // 2) InsuranceContract — init() tanpa argumen
+    println!("▶ Deploying InsuranceContract (init no args)...");
     env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
     let insurance = InsuranceContract::deploy(&env, NoArgs);
-    println!("Insurance      : {:?}", insurance.address());
+    println!("✓ Insurance      : {:?}", insurance.address());
 
     // 3) TreasuryContract — init(auto_execute_threshold: U512)
+    println!("▶ Deploying TreasuryContract (init auto_execute_threshold=1000000000)...");
     env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
     let treasury = TreasuryContract::deploy(
         &env,
@@ -61,17 +80,19 @@ fn main() {
             auto_execute_threshold: U512::from(1_000_000_000u64),
         },
     );
-    println!("Treasury       : {:?}", treasury.address());
+    println!("✓ Treasury       : {:?}", treasury.address());
 
     // 4) RwaVault — init() tanpa argumen
+    println!("▶ Deploying RwaVault (init no args)...");
     env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
     let rwa_vault = RwaVault::deploy(&env, NoArgs);
-    println!("RwaVault       : {:?}", rwa_vault.address());
+    println!("✓ RwaVault       : {:?}", rwa_vault.address());
 
     // 5) CarbonGuard — init() tanpa argumen
+    println!("▶ Deploying CarbonGuard (init no args)...");
     env.set_gas(10_000_000_000u64); // 10 CSPR upfront (refunded if unused)
     let carbon_guard = CarbonGuard::deploy(&env, NoArgs);
-    println!("CarbonGuard    : {:?}", carbon_guard.address());
+    println!("✓ CarbonGuard    : {:?}", carbon_guard.address());
 
     println!("\n✅ Selesai. Salin address di atas ke .env.local (format hash-...)");
 }

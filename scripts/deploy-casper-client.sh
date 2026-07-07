@@ -275,12 +275,28 @@ fi
 # SESSION_ARGS is empty for contracts with no init args, or a semicolon-separated
 # list of "name:type:value" triples for contracts that need init args.
 #
+# IMPORTANT — Odra init() requires 4 mandatory "odra_cfg_*" runtime args even
+# for contracts whose init() takes no user args. These are injected by Odra's
+# host.rs::try_deploy_with_cfg() at deploy time:
+#   - odra_cfg_package_hash_key_name : string  (e.g. "agent_registry_package_hash")
+#   - odra_cfg_allow_key_override    : bool    (false)
+#   - odra_cfg_is_upgradable         : bool    (true)
+#   - odra_cfg_is_upgrade            : bool    (false)
+#
+# Without these, init() reverts with OdraError::MissingArg (code 64658 =
+# 64536 UserErrorTooHigh + 122 MissingArg) — even though wasm preprocessing
+# succeeded and the contract appears to install.
+#
+# The submit_deploy() function below auto-prepends these 4 args to every
+# contract's user-supplied args. User-supplied args (like
+# auto_execute_threshold for TreasuryContract) are appended after.
+#
 # Order matches contracts/odra/bin/deploy.rs:
-#   1. AgentRegistry   — init() no args
-#   2. InsuranceContract — init() no args
+#   1. AgentRegistry   — init() no user args
+#   2. InsuranceContract — init() no user args
 #   3. TreasuryContract — init(auto_execute_threshold: U512)
-#   4. RwaVault        — init() no args
-#   5. CarbonGuard     — init() no args
+#   4. RwaVault        — init() no user args
+#   5. CarbonGuard     — init() no user args
 # ============================================================================
 
 declare -a CONTRACTS=(
@@ -300,8 +316,22 @@ submit_deploy() {
   local session_args_str="$3"
   local wasm_path="$CONTRACTS_DIR/wasm/$wasm_filename"
 
-  # Build the session-arg list (each as --session-arg "name:type='value'")
+  # Build the session-arg list. ALWAYS prepend the 4 mandatory odra_cfg_* args.
+  # The package_hash_key_name is derived from the contract's display name
+  # (snake_case + "_package_hash"), matching what Odra's host.rs does.
   local -a session_args=()
+
+  # Convert display_name (e.g. "AgentRegistry") to snake_case (e.g. "agent_registry")
+  local snake_name
+  snake_name=$(echo "$display_name" | sed -E 's/([a-z0-9])([A-Z])/\1_\2/g' | tr '[:upper:]' '[:lower:]')
+
+  # 4 mandatory Odra config args (matches odra-core/src/host.rs:254-262)
+  session_args+=(--session-arg "odra_cfg_package_hash_key_name:string:'${snake_name}_package_hash'")
+  session_args+=(--session-arg "odra_cfg_allow_key_override:bool:'false'")
+  session_args+=(--session-arg "odra_cfg_is_upgradable:bool:'true'")
+  session_args+=(--session-arg "odra_cfg_is_upgrade:bool:'false'")
+
+  # User-supplied init args (e.g. auto_execute_threshold for TreasuryContract)
   if [[ -n "$session_args_str" ]]; then
     IFS=';' read -ra pairs <<< "$session_args_str"
     for pair in "${pairs[@]}"; do
