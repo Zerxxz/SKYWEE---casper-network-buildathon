@@ -95,6 +95,12 @@ function shortKey(key: string | null): string | null {
  *   - Modern: window.casperWalletProvider (ready-to-use instance)
  *   - Constructor: window.CasperWalletProvider (needs `new`)
  *   - Legacy Signer: window.casperlabsHelper (different API, needs adapter)
+ *   - Alt name: window.casperWallet (some forks)
+ *   - alt: window.casperwallet
+ *
+ * NOTE: Casper Wallet extension injects via content script that may run
+ * AFTER page load. The provider may not be available immediately —
+ * aggressive polling + user interaction triggers are required.
  */
 function detectProvider(): {
   provider: CasperWalletProvider | null
@@ -105,18 +111,27 @@ function detectProvider(): {
     return { provider: null, type: "none", globals: [] }
   }
 
-  // Collect all detected Casper-related globals for diagnostics
+  // Collect ALL Casper-related globals for diagnostics
+  // (even ones we don't know how to use — helps user verify extension is loaded)
   const globals: string[] = []
+  const casperKeys = Object.keys(window).filter((k) =>
+    /casper/i.test(k) || /wallet/i.test(k),
+  )
+  globals.push(...casperKeys)
+
+  // Also check specific known patterns
   if (window.casperWalletProvider) globals.push("casperWalletProvider")
   if (window.CasperWalletProvider) globals.push("CasperWalletProvider")
   if (window.casperlabsHelper) globals.push("casperlabsHelper")
+  // Deduplicate
+  const uniqueGlobals = [...new Set(globals)]
 
   // 1. Modern Casper Wallet — instance already on window
   if (window.casperWalletProvider) {
     return {
       provider: window.casperWalletProvider,
       type: "casper-wallet",
-      globals,
+      globals: uniqueGlobals,
     }
   }
 
@@ -128,7 +143,7 @@ function detectProvider(): {
         return {
           provider: instance,
           type: "casper-wallet",
-          globals,
+          globals: uniqueGlobals,
         }
       }
     } catch {
@@ -136,18 +151,35 @@ function detectProvider(): {
     }
   }
 
-  // 3. Legacy Casper Signer — different API, would need an adapter.
+  // 3. Alt name pattern — some forks/versions use different casing
+  const w = window as unknown as Record<string, unknown>
+  const altNames = ["casperWallet", "casperwallet", "CasperWallet"]
+  for (const name of altNames) {
+    const candidate = w[name]
+    if (candidate && typeof candidate === "object") {
+      const c = candidate as Partial<CasperWalletProvider>
+      if (typeof c.isConnected === "function" && typeof c.requestConnection === "function") {
+        return {
+          provider: candidate as CasperWalletProvider,
+          type: "casper-wallet",
+          globals: uniqueGlobals,
+        }
+      }
+    }
+  }
+
+  // 4. Legacy Casper Signer — different API, would need an adapter.
   // For now we just report it as detected but don't use it (Signer doesn't
   // support signDeploy in the same way). User should install Casper Wallet.
   if (window.casperlabsHelper) {
     return {
       provider: null,
       type: "casper-signer",
-      globals,
+      globals: uniqueGlobals,
     }
   }
 
-  return { provider: null, type: "none", globals }
+  return { provider: null, type: "none", globals: uniqueGlobals }
 }
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
@@ -166,11 +198,26 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   // for the constructor pattern).
   const providerRef = React.useRef<CasperWalletProvider | null>(null)
 
-  // Detect extension on mount + poll aggressively for the first 15 seconds
-  // (extension content scripts can take a moment to inject after page load).
+  // Detect extension on mount + poll SUPER aggressively.
+  // Casper Wallet extension injects window.casperWalletProvider via content
+  // script that may run AFTER page load. Some extensions only inject after
+  // specific events (click, focus, mousemove). We use multiple strategies:
+  //   1. Immediate check on mount
+  //   2. Poll every 200ms for first 60s (300 checks)
+  //   3. Listen for window 'load' event (extension often injects here)
+  //   4. Listen for first user interaction (click/keydown/mousemove) —
+  //      some extensions lazy-inject on user activity
+  //   5. Listen for custom 'casperWallet:loaded' event (some extensions dispatch)
   React.useEffect(() => {
-    const checkExtension = () => {
+    const checkExtension = (source?: string) => {
       const { provider, type, globals } = detectProvider()
+      if (provider && !providerRef.current) {
+        console.log(`[SKYWEE] Casper Wallet detected via ${source ?? "unknown"}`, {
+          type,
+          globals,
+          provider,
+        })
+      }
       providerRef.current = provider
       setState((s) => ({
         ...s,
@@ -180,28 +227,58 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       }))
     }
 
-    // Check immediately
-    checkExtension()
+    // Strategy 1: Immediate check
+    checkExtension("mount")
 
-    // Poll aggressively for first 15s (extension may still be loading)
-    // — every 500ms for first 30 checks, then every 3s after
+    // Strategy 2: Aggressive polling — every 200ms for first 60s (300 checks),
+    // then every 2s after
     let checkCount = 0
-    const interval = setInterval(() => {
+    const fastInterval = setInterval(() => {
       checkCount++
-      checkExtension()
-      if (checkCount >= 30) {
-        clearInterval(interval)
-        // Switch to slow polling for late-loading extensions
-        const slowInterval = setInterval(checkExtension, 3000)
-        // Store cleanup in a closure — will be cleaned up by return function
-        ;(interval as unknown as { _slow?: ReturnType<typeof setInterval> })._slow = slowInterval
+      checkExtension("poll-fast")
+      if (checkCount >= 300) {
+        clearInterval(fastInterval)
       }
-    }, 500)
+    }, 200)
+    const slowInterval = setInterval(() => {
+      checkExtension("poll-slow")
+    }, 2000)
+
+    // Strategy 3: window 'load' event
+    const handleLoad = () => checkExtension("window-load")
+    window.addEventListener("load", handleLoad)
+
+    // Strategy 4: User interaction triggers — extension may lazy-inject
+    const handleUserInteraction = () => {
+      checkExtension("user-interaction")
+      // After first interaction, remove these listeners (extension should be loaded now)
+      document.removeEventListener("click", handleUserInteraction)
+      document.removeEventListener("keydown", handleUserInteraction)
+      document.removeEventListener("mousemove", handleUserInteraction)
+      document.removeEventListener("touchstart", handleUserInteraction)
+    }
+    document.addEventListener("click", handleUserInteraction)
+    document.addEventListener("keydown", handleUserInteraction)
+    document.addEventListener("mousemove", handleUserInteraction)
+    document.addEventListener("touchstart", handleUserInteraction)
+
+    // Strategy 5: Custom event some extensions dispatch
+    const handleCasperEvent = () => checkExtension("casper-event")
+    window.addEventListener("casperWallet:loaded", handleCasperEvent)
+    window.addEventListener("casper:ready", handleCasperEvent)
+    window.addEventListener("casperwallet:initialized", handleCasperEvent)
 
     return () => {
-      clearInterval(interval)
-      const slow = (interval as unknown as { _slow?: ReturnType<typeof setInterval> })._slow
-      if (slow) clearInterval(slow)
+      clearInterval(fastInterval)
+      clearInterval(slowInterval)
+      window.removeEventListener("load", handleLoad)
+      document.removeEventListener("click", handleUserInteraction)
+      document.removeEventListener("keydown", handleUserInteraction)
+      document.removeEventListener("mousemove", handleUserInteraction)
+      document.removeEventListener("touchstart", handleUserInteraction)
+      window.removeEventListener("casperWallet:loaded", handleCasperEvent)
+      window.removeEventListener("casper:ready", handleCasperEvent)
+      window.removeEventListener("casperwallet:initialized", handleCasperEvent)
     }
   }, [])
 

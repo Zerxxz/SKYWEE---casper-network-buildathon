@@ -103,10 +103,37 @@ export function LandingPage({ onEnter }: LandingPageProps) {
     onEnter()
   }, [enterDemoMode, onEnter])
 
-  // Handle "Retry" — force re-detect extension
+  // Handle "Retry" — force re-detect extension + log diagnostics to console
   const handleRetry = React.useCallback(() => {
+    console.log("[SKYWEE] Manual recheck triggered")
+    console.log("[SKYWEE] window.casperWalletProvider =", typeof window !== "undefined" ? window.casperWalletProvider : "SSR")
+    console.log("[SKYWEE] window.CasperWalletProvider =", typeof window !== "undefined" ? (window as unknown as { CasperWalletProvider?: unknown }).CasperWalletProvider : "SSR")
+    console.log("[SKYWEE] All window keys with 'casper' or 'wallet':",
+      typeof window !== "undefined"
+        ? Object.keys(window).filter((k) => /casper/i.test(k) || /wallet/i.test(k))
+        : []
+    )
     recheckExtension()
   }, [recheckExtension])
+
+  // Handle "Manual Check" — same as retry but with stronger console output
+  const handleManualCheck = React.useCallback(() => {
+    handleRetry()
+    // Also try to detect any object on window that has isConnected method
+    if (typeof window !== "undefined") {
+      console.log("[SKYWEE] Scanning all window properties for wallet-like objects...")
+      for (const key of Object.keys(window)) {
+        try {
+          const val = (window as unknown as Record<string, unknown>)[key]
+          if (val && typeof val === "object" && "isConnected" in val) {
+            console.log(`[SKYWEE] Found wallet-like object at window.${key}:`, val)
+          }
+        } catch {
+          // skip
+        }
+      }
+    }
+  }, [handleRetry])
 
   return (
     <div className="relative min-h-screen flex flex-col bg-background overflow-hidden">
@@ -333,14 +360,42 @@ export function LandingPage({ onEnter }: LandingPageProps) {
               animate={{ opacity: 1, height: "auto" }}
               className="text-[10px] font-mono text-muted-foreground/70 skywee-hairline bg-foreground/[0.02] rounded-md p-3 max-w-md w-full"
             >
+              <div className="font-bold text-foreground mb-2">Diagnostic Info</div>
               <div>providerType: <span className="text-foreground">{providerType}</span></div>
               <div>isExtensionInstalled: <span className="text-foreground">{String(isExtensionInstalled)}</span></div>
               <div>status: <span className="text-foreground">{status}</span></div>
               <div>detectedGlobals: <span className="text-foreground">{detectedGlobals.length ? detectedGlobals.join(", ") : "(none)"}</span></div>
-              <div className="mt-2 text-muted-foreground/50">
-                Expected: casperWalletProvider (modern Casper Wallet)
+              <div className="mt-3 mb-2 text-muted-foreground/50">Checked patterns:</div>
+              <div className="text-muted-foreground/50 pl-2">
+                • window.casperWalletProvider (modern Casper Wallet)
                 <br />
-                Also checked: CasperWalletProvider (constructor), casperlabsHelper (legacy Signer)
+                • window.CasperWalletProvider (constructor pattern)
+                <br />
+                • window.casperWallet / casperwallet / CasperWallet (alt names)
+                <br />
+                • window.casperlabsHelper (legacy Casper Signer)
+              </div>
+              <div className="mt-3 mb-2 text-muted-foreground/50">Manual verification:</div>
+              <div className="text-muted-foreground/50 pl-2">
+                1. Open DevTools (F12) → Console tab
+                <br />
+                2. Run: <code className="text-foreground bg-foreground/10 px-1 rounded">typeof window.casperWalletProvider</code>
+                <br />
+                3. Should return <code className="text-foreground bg-foreground/10 px-1 rounded">"object"</code> if extension is loaded
+                <br />
+                4. If <code className="text-foreground bg-foreground/10 px-1 rounded">"undefined"</code>: check chrome://extensions,
+                <br />
+                &nbsp;&nbsp;&nbsp;ensure Casper Wallet is enabled + has site access
+              </div>
+              <button
+                type="button"
+                onClick={handleManualCheck}
+                className="mt-3 w-full text-[10px] font-mono px-2 py-1.5 rounded skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] transition-colors"
+              >
+                🔍 Manual check + scan window (open DevTools console first)
+              </button>
+              <div className="mt-2 text-muted-foreground/50">
+                Click above then check browser console (F12) for detailed scan results
               </div>
             </motion.div>
           )}
