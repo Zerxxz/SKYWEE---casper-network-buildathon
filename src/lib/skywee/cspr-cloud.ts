@@ -5,7 +5,8 @@
  * https://api.testnet.cspr.cloud). All calls are server-side only.
  *
  * Authentication:
- *   CSPR.cloud requires a Bearer API key. Set CSPR_CLOUD_API_KEY in your
+ *   CSPR.cloud requires an API key (raw token, no "Bearer" prefix).
+ *   Set CSPR_CLOUD_AUTH_TOKEN (or the legacy CSPR_CLOUD_API_KEY) in your
  *   environment. You can obtain a free key at https://cspr.cloud after
  *   signing up. The key grants read access to:
  *     - Network status (info, era, peers)
@@ -23,7 +24,9 @@
  */
 
 const NETWORK = process.env.CSPR_NETWORK ?? "testnet"
-const API_KEY = process.env.CSPR_CLOUD_API_KEY
+// Support both env var names — CSPR_CLOUD_AUTH_TOKEN is what's deployed on Vercel,
+// CSPR_CLOUD_API_KEY is the older name kept for backward compatibility.
+const API_KEY = process.env.CSPR_CLOUD_AUTH_TOKEN ?? process.env.CSPR_CLOUD_API_KEY
 const BASE_URL = NETWORK === "mainnet"
   ? "https://api.cspr.cloud"
   : "https://api.testnet.cspr.cloud"
