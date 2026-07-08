@@ -230,14 +230,8 @@ export async function POST(req: Request) {
 
     // Use raw fetch to RPC — more reliable than SDK for Casper 2.x
     // CSPR.cloud expects raw token (no "Bearer" prefix)
-    const rpcPayload = {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "account_put_deploy",
-      params: [normalizedDeploy],
-    }
-
-    console.log("[broadcast] Sending to RPC:", RPC_URL)
+    // Try both methods: account_put_deploy (Casper 1.x) and account_put_transaction (Casper 2.x)
+    const rpcMethods = ["account_put_deploy", "account_put_transaction"]
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -246,45 +240,83 @@ export async function POST(req: Request) {
       headers["Authorization"] = AUTH_TOKEN
     }
 
-    const rpcResponse = await fetch(RPC_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(rpcPayload),
-    })
+    let lastError: string | null = null
+    let deployHash: string | null = null
 
-    console.log("[broadcast] RPC response status:", rpcResponse.status)
+    for (const method of rpcMethods) {
+      const rpcPayload = {
+        jsonrpc: "2.0",
+        id: 1,
+        method,
+        params: [normalizedDeploy],
+      }
 
-    const rpcText = await rpcResponse.text()
-    console.log("[broadcast] RPC response body (first 500 chars):", rpcText.substring(0, 500))
+      console.log(`[broadcast] Trying RPC method: ${method}`)
+      console.log(`[broadcast] Sending to RPC:`, RPC_URL)
+      console.log(`[broadcast] Deploy keys being sent:`, Object.keys(normalizedDeploy as object))
 
-    if (!rpcResponse.ok) {
-      return err(
-        `RPC returned HTTP ${rpcResponse.status}: ${rpcText.substring(0, 200)}`,
-        502,
-      )
+      // Log the full deploy structure for debugging
+      try {
+        const deployStr = JSON.stringify(normalizedDeploy)
+        console.log(`[broadcast] Full normalized deploy JSON (first 2000 chars):`, deployStr.substring(0, 2000))
+        console.log(`[broadcast] Full deploy length:`, deployStr.length, "chars")
+      } catch {
+        console.log(`[broadcast] Could not stringify normalized deploy`)
+      }
+
+      const rpcResponse = await fetch(RPC_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(rpcPayload),
+      })
+
+      console.log(`[broadcast] RPC response status (${method}):`, rpcResponse.status)
+
+      const rpcText = await rpcResponse.text()
+      console.log(`[broadcast] RPC response body (${method}, first 1000 chars):`, rpcText.substring(0, 1000))
+
+      if (!rpcResponse.ok) {
+        lastError = `RPC returned HTTP ${rpcResponse.status}: ${rpcText.substring(0, 300)}`
+        console.log(`[broadcast] ${method} failed with HTTP ${rpcResponse.status}, trying next method...`)
+        continue
+      }
+
+      // Parse RPC response
+      let rpcResult: { jsonrpc?: string; result?: { deploy_hash?: string; transaction_hash?: string }; error?: { code?: number; message?: string; data?: unknown } }
+      try {
+        rpcResult = JSON.parse(rpcText)
+      } catch {
+        lastError = `RPC returned invalid JSON: ${rpcText.substring(0, 300)}`
+        console.log(`[broadcast] ${method} returned invalid JSON, trying next method...`)
+        continue
+      }
+
+      if (rpcResult.error) {
+        lastError = `RPC error ${rpcResult.error.code}: ${rpcResult.error.message}` +
+          (rpcResult.error.data ? ` (data: ${JSON.stringify(rpcResult.error.data).substring(0, 200)})` : "")
+        console.log(`[broadcast] ${method} returned error:`, rpcResult.error)
+        // -32601 means method not found — try next method
+        if (rpcResult.error.code === -32601) {
+          continue
+        }
+        // For other errors, return immediately (don't try next method)
+        return err(lastError, 502)
+      }
+
+      // Success! Extract deploy hash
+      deployHash = rpcResult.result?.deploy_hash ?? rpcResult.result?.transaction_hash ?? null
+      if (deployHash) {
+        console.log(`[broadcast] ✅ Deploy broadcast successfully via ${method}! Hash:`, deployHash)
+        break
+      }
+
+      lastError = `RPC did not return deploy_hash or transaction_hash`
+      console.log(`[broadcast] ${method} did not return hash, trying next method...`)
     }
 
-    // Parse RPC response
-    let rpcResult: { jsonrpc?: string; result?: { deploy_hash?: string }; error?: { code?: number; message?: string } }
-    try {
-      rpcResult = JSON.parse(rpcText)
-    } catch {
-      return err(`RPC returned invalid JSON: ${rpcText.substring(0, 200)}`, 502)
-    }
-
-    if (rpcResult.error) {
-      return err(
-        `RPC error ${rpcResult.error.code}: ${rpcResult.error.message}`,
-        502,
-      )
-    }
-
-    const deployHash = rpcResult.result?.deploy_hash
     if (!deployHash) {
-      return err("RPC did not return deploy_hash", 502)
+      return err(lastError ?? "All RPC methods failed", 502)
     }
-
-    console.log("[broadcast] ✅ Deploy broadcast successfully! Hash:", deployHash)
 
     // Record in DB
     try {
