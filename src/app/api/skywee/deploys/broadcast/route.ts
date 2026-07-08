@@ -58,12 +58,20 @@ export async function POST(req: Request) {
       console.log("[broadcast] Unsigned deploy hash:", unsignedDeploy?.hash)
       console.log("[broadcast] Account in header:", (unsignedDeploy?.header as Record<string, unknown>)?.account?.toString().substring(0, 30))
 
-      // Convert signature to hex string (0x-prefixed)
+      // Convert signature to hex string (NO 0x prefix — Casper RPC rejects it)
+      // Error was: "decoding from hex: Invalid byte 'b'x', at index 1"
+      // This means RPC got a string starting with "0x" and tried to decode
+      // the 'x' as a hex byte — fails. Casper expects RAW hex only.
       const sig = signedDeployObj.signature
       let signatureHex: string
 
+      const bytesToHex = (bytes: Uint8Array): string => {
+        return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")
+      }
+
       if (typeof sig === "string") {
-        signatureHex = sig.startsWith("0x") ? sig : "0x" + sig
+        // Remove 0x prefix if present, then use raw hex
+        signatureHex = sig.startsWith("0x") ? sig.slice(2) : sig
       } else if (sig && typeof sig === "object") {
         const sigObj = sig as Record<string, unknown>
         const keys = Object.keys(sigObj)
@@ -73,27 +81,30 @@ export async function POST(req: Request) {
           for (let i = 0; i < keys.length; i++) {
             bytes[i] = sigObj[String(i)] as number
           }
-          signatureHex = "0x" + Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")
+          signatureHex = bytesToHex(bytes)
         } else if (Array.isArray(sig)) {
-          signatureHex = "0x" + (sig as number[]).map((b) => b.toString(16).padStart(2, "0")).join("")
+          signatureHex = bytesToHex(new Uint8Array(sig as number[]))
         } else {
           throw new Error(`Could not extract signature from object. Keys: ${keys.join(", ")}`)
         }
       } else if (sig instanceof Uint8Array) {
-        signatureHex = "0x" + Array.from(sig).map((b) => b.toString(16).padStart(2, "0")).join("")
+        signatureHex = bytesToHex(sig)
       } else {
         throw new Error(`Unexpected signature type: ${typeof sig}`)
       }
 
+      console.log("[broadcast] Signature hex (first 40 chars):", signatureHex.substring(0, 40))
       console.log("[broadcast] Signature hex length:", signatureHex.length)
 
-      // Get signer public key — ensure it's hex without 0x prefix
+      // Get signer public key — ensure it's hex WITHOUT 0x prefix
+      // Casper RPC expects raw hex for all key/signature fields
       const signerRaw = signedDeployObj.signerPublicKey ?? ""
       const signer = signerRaw.startsWith("0x") ? signerRaw.slice(2) : signerRaw
       console.log("[broadcast] Signer pubkey (first 20 chars):", signer.substring(0, 20))
 
       // MANUALLY add approval — bypass SDK entirely
       // This avoids "asymmetric key error: invalid tag" caused by SDK corrupting key format
+      // 0x prefix will be stripped globally in Step 2 below
       deployToBroadcast = {
         ...unsignedDeploy,
         approvals: [
@@ -115,7 +126,33 @@ export async function POST(req: Request) {
       console.log("[broadcast] Using deploy object as-is")
     }
 
-    // Step 2: Log deploy structure
+    // Step 2: Strip 0x prefix from ALL hex strings in the deploy
+    // Casper RPC rejects "0x" prefix with: "decoding from hex: Invalid byte 'x' at index 1"
+    // This applies to: hash, bodyHash, account, approvals[].signer, approvals[].signature,
+    // and any other hex-encoded fields in the deploy structure.
+    const stripHexPrefix = (obj: unknown): unknown => {
+      if (typeof obj === "string") {
+        if (obj.startsWith("0x") && /^0x[0-9a-fA-F]+$/.test(obj)) {
+          return obj.slice(2)
+        }
+        return obj
+      }
+      if (Array.isArray(obj)) {
+        return obj.map(stripHexPrefix)
+      }
+      if (obj && typeof obj === "object") {
+        const result: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+          result[k] = stripHexPrefix(v)
+        }
+        return result
+      }
+      return obj
+    }
+
+    deployToBroadcast = stripHexPrefix(deployToBroadcast) as Record<string, unknown>
+
+    // Step 3: Log deploy structure
     console.log("[broadcast] Deploy keys:", Object.keys(deployToBroadcast))
     console.log("[broadcast] Has hash:", "hash" in deployToBroadcast)
     console.log("[broadcast] Has header:", "header" in deployToBroadcast)
@@ -126,7 +163,7 @@ export async function POST(req: Request) {
     // Log the account field from header — this is what RPC validates
     const header = deployToBroadcast.header as Record<string, unknown> | undefined
     if (header) {
-      console.log("[broadcast] Header account:", header.account)
+      console.log("[broadcast] Header account (first 30):", header.account?.toString().substring(0, 30))
       console.log("[broadcast] Header chainName:", header.chainName)
       console.log("[broadcast] Header timestamp:", header.timestamp)
       console.log("[broadcast] Header ttl:", header.ttl)
