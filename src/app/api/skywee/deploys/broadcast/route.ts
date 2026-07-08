@@ -44,13 +44,57 @@ export async function POST(req: Request) {
     }
 
     // The signed deploy from Casper Wallet might be:
-    // - A JSON object (standard signDeploy)
-    // - A JSON string (some sign() methods return string)
-    // - An object with different structure
+    // 1. A full signed deploy object (from signDeploy method)
+    // 2. A reconstruction object { __needsReconstruction, unsignedDeploy, signature, signerPublicKey }
+    // 3. A JSON string
     let deployToBroadcast: unknown = body.signedDeploy
 
-    // If it's a string, try to parse it
-    if (typeof body.signedDeploy === "string") {
+    // Check if this needs reconstruction (wallet returned only signature)
+    const signedDeployObj = body.signedDeploy as { __needsReconstruction?: boolean; unsignedDeploy?: unknown; signature?: unknown; signerPublicKey?: string }
+    if (signedDeployObj?.__needsReconstruction && signedDeployObj.unsignedDeploy && signedDeployObj.signature) {
+      console.log("[broadcast] 🔧 Reconstructing signed deploy from unsigned deploy + signature")
+
+      try {
+        const { Deploy, PublicKey } = await import("casper-js-sdk")
+
+        // Parse the unsigned deploy
+        const deploy = Deploy.fromJSON(signedDeployObj.unsignedDeploy as never)
+        console.log("[broadcast] Parsed unsigned deploy successfully")
+
+        // Parse the signature — it might be hex string or bytes
+        let signatureBytes: Uint8Array
+        const sig = signedDeployObj.signature
+        if (typeof sig === "string") {
+          // Hex string — remove 0x prefix if present
+          const hex = sig.startsWith("0x") ? sig.slice(2) : sig
+          signatureBytes = new Uint8Array(hex.length / 2)
+          for (let i = 0; i < signatureBytes.length; i++) {
+            signatureBytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+          }
+        } else if (sig instanceof Uint8Array) {
+          signatureBytes = sig
+        } else {
+          throw new Error(`Unexpected signature type: ${typeof sig}`)
+        }
+        console.log("[broadcast] Signature bytes length:", signatureBytes.length)
+
+        // Parse signer public key
+        const publicKey = PublicKey.fromHex(signedDeployObj.signerPublicKey)
+
+        // Attach signature to deploy
+        const signedDeploy = Deploy.setSignature(deploy, signatureBytes, publicKey)
+        console.log("[broadcast] ✅ Signature attached to deploy")
+
+        // Convert to JSON for RPC
+        const deployJson = Deploy.toJSON(signedDeploy)
+        deployToBroadcast = typeof deployJson === "string" ? JSON.parse(deployJson) : deployJson
+        console.log("[broadcast] Reconstructed deploy keys:", Object.keys(deployToBroadcast as object))
+      } catch (e) {
+        console.error("[broadcast] Reconstruction failed:", e)
+        return err(`Failed to reconstruct signed deploy: ${e instanceof Error ? e.message : String(e)}`, 500)
+      }
+    } else if (typeof body.signedDeploy === "string") {
+      // If it's a string, try to parse it
       try {
         deployToBroadcast = JSON.parse(body.signedDeploy)
         console.log("[broadcast] Parsed string deploy to object")

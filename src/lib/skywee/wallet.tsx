@@ -584,10 +584,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       const providerAny = provider as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>
       const result = await providerAny[signMethod](deployStr, state.publicKey)
 
-      console.log("[SKYWEE] Sign result:", result)
+      console.log("[SKYWEE] Sign result type:", typeof result)
+      console.log("[SKYWEE] Sign result (truncated):", JSON.stringify(result).substring(0, 500))
 
       // Handle different result shapes
-      const resultObj = result as { cancelled?: boolean; deploy?: unknown; signed?: unknown; signature?: unknown; error?: string }
+      const resultObj = result as {
+        cancelled?: boolean
+        deploy?: unknown
+        signed?: unknown
+        signature?: unknown
+        approval?: unknown
+        error?: string
+      }
 
       if (resultObj?.cancelled) {
         throw new Error("User cancelled the signing request")
@@ -597,12 +605,32 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         throw new Error(`Wallet error: ${resultObj.error}`)
       }
 
-      // Return deploy object (try multiple result keys)
-      const signedDeploy = resultObj?.deploy ?? resultObj?.signed ?? resultObj?.signature ?? result
-      if (!signedDeploy) {
-        throw new Error("Wallet did not return a signed deploy")
+      // Return object with all possible fields — broadcast route will reconstruct
+      // The wallet's sign() method may return just a signature (not a full deploy).
+      // We return both the original deploy + signature so the server can reconstruct.
+      const signedDeploy = resultObj?.deploy ?? resultObj?.signed
+      const signature = resultObj?.signature ?? resultObj?.approval
+
+      if (signedDeploy) {
+        // Full signed deploy returned — use directly
+        console.log("[SKYWEE] Returning full signed deploy object")
+        return signedDeploy
       }
-      return signedDeploy
+
+      if (signature) {
+        // Only signature returned — return object with deploy + signature for server reconstruction
+        console.log("[SKYWEE] Returning signature only — server will reconstruct deploy")
+        return {
+          __needsReconstruction: true,
+          unsignedDeploy: deployJson,
+          signature: signature,
+          signerPublicKey: state.publicKey,
+        }
+      }
+
+      // Last resort — return whatever we got
+      console.log("[SKYWEE] Returning raw result as fallback")
+      return result
     },
     [state.isDemo, state.publicKey],
   )
