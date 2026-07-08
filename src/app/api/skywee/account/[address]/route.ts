@@ -3,7 +3,7 @@
  *   Returns all user-specific data: agents owned, transactions, balance, stats.
  */
 import { NextRequest } from "next/server"
-import { db, ensureSchema } from "@/lib/db"
+import { db } from "@/lib/db"
 import { ok, err } from "@/lib/skywee/api"
 import { getAccountInfo } from "@/lib/skywee/cspr-cloud"
 import { EXPLORER } from "@/lib/skywee/cspr-cloud"
@@ -15,7 +15,6 @@ export async function GET(
   { params }: { params: Promise<{ address: string }> },
 ) {
   try {
-    await ensureSchema(db)
     const { address } = await params
     if (!address) return err("address is required", 400)
 
