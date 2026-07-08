@@ -41,12 +41,14 @@ export async function POST(req: Request) {
         // Lazy-import the SDK only when needed (and only on the server)
         const { RpcClient, Deploy, HttpHandler } = await import("casper-js-sdk")
         const handler = new HttpHandler(RPC_URL)
-        // CSPR.cloud requires Bearer auth on every request.
-        // HttpHandler supports custom headers via setCustomHeaders().
+        // CSPR.cloud requires auth on every request.
+        // IMPORTANT: CSPR.cloud expects the raw token WITHOUT "Bearer" prefix.
+        // Tested 2026-07-08: `Bearer <token>` returns 401 "access key not found".
+        // Raw `<token>` works correctly.
         const authToken = process.env.CSPR_CLOUD_AUTH_TOKEN
         if (authToken) {
           handler.setCustomHeaders({
-            "Authorization": `Bearer ${authToken}`,
+            "Authorization": authToken,
           })
         }
         const client = new RpcClient(handler)

@@ -26,11 +26,11 @@ export async function GET(
       try {
         const { RpcClient, HttpHandler } = await import("casper-js-sdk")
         const handler = new HttpHandler(RPC_URL)
-        // CSPR.cloud requires Bearer auth on every request.
+        // CSPR.cloud expects the raw token WITHOUT "Bearer" prefix.
         const authToken = process.env.CSPR_CLOUD_AUTH_TOKEN
         if (authToken) {
           handler.setCustomHeaders({
-            "Authorization": `Bearer ${authToken}`,
+            "Authorization": authToken,
           })
         }
         const client = new RpcClient(handler)

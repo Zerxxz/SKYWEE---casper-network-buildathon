@@ -71,7 +71,9 @@ async function csprFetch<T>(path: string, opts: RequestInit = {}): Promise<T | n
       ...opts,
       headers: {
         "Accept": "application/json",
-        "Authorization": `Bearer ${API_KEY}`,
+        // CSPR.cloud API expects the raw token without "Bearer" prefix.
+        // Tested 2026-07-08: Bearer format returns 401 "access key not found".
+        "Authorization": API_KEY,
         ...(opts.headers ?? {}),
       },
       // Use Next.js fetch cache for additional layer
@@ -152,35 +154,40 @@ export interface BlockInfo {
  * Falls back to synthetic data when API key is missing.
  */
 export async function getNetworkStatus(): Promise<NetworkStatus> {
-  // Try CSPR.cloud network info endpoint
-  const info = await csprFetch<{
-    data?: {
-      name?: string
-      latest_block_height?: number
-      latest_block_hash?: string
-      era_id?: number
-      peers?: number
-      validators?: number
-      total_supply?: string
-      block_time_ms?: number
-    }
-  }>("/network/info")
+  // CSPR.cloud doesn't have a /network/info endpoint — fetch latest block + supply in parallel
+  const [blockRes, supplyRes] = await Promise.all([
+    csprFetch<{
+      data?: Array<{
+        block_height?: number
+        block_hash?: string
+        era_id?: number
+        timestamp?: string
+        proposer_public_key?: string
+      }>
+    }>("/blocks?limit=1"),
+    csprFetch<{
+      data?: {
+        total?: string
+        circulating?: string
+      }
+    }>("/supply"),
+  ])
 
-  if (info?.data) {
+  const block = blockRes?.data?.[0]
+  if (block) {
+    const totalSupplyStr = supplyRes?.data?.total
     return {
       network: NETWORK as "testnet" | "mainnet",
       hasRealData: true,
-      blockHeight: info.data.latest_block_height ?? 0,
-      blockHash: info.data.latest_block_hash ?? null,
-      eraId: info.data.era_id ?? null,
-      peerCount: info.data.peers ?? null,
-      validatorCount: info.data.validators ?? null,
-      totalSupply: info.data.total_supply
-        ? parseInt(info.data.total_supply, 10) / 1e9
+      blockHeight: block.block_height ?? 0,
+      blockHash: block.block_hash ?? null,
+      eraId: block.era_id ?? null,
+      peerCount: null,
+      validatorCount: null,
+      totalSupply: totalSupplyStr
+        ? parseInt(totalSupplyStr, 10) / 1e9
         : null,
-      blockTimeSec: info.data.block_time_ms
-        ? info.data.block_time_ms / 1000
-        : null,
+      blockTimeSec: 16,
       lastUpdated: new Date().toISOString(),
     }
   }
@@ -223,13 +230,13 @@ export async function getAccountInfo(publicKey: string): Promise<AccountInfo> {
   }
 
   // CSPR.cloud account endpoint: GET /accounts/{publicKey}
+  // API returns snake_case fields: account_hash, public_key, balance, etc.
   const account = await csprFetch<{
     data?: {
-      publicKey?: string
+      public_key?: string
       balance?: string
-      accountHash?: string
-      deployCount?: number
-      lastActive?: string
+      account_hash?: string
+      main_purse_uref?: string
     }
   }>(`/accounts/${publicKey}`)
 
@@ -240,10 +247,10 @@ export async function getAccountInfo(publicKey: string): Promise<AccountInfo> {
       hasRealData: true,
       balanceMotes,
       balanceCSPR: balanceMotes ? parseInt(balanceMotes, 10) / 1e9 : null,
-      accountHash: account.data.accountHash ?? null,
+      accountHash: account.data.account_hash ?? null,
       lastDeployHash: null,
-      deployCount: account.data.deployCount ?? null,
-      lastActive: account.data.lastActive ?? null,
+      deployCount: null,
+      lastActive: null,
     }
   }
 
@@ -266,24 +273,26 @@ export async function getAccountInfo(publicKey: string): Promise<AccountInfo> {
 export async function getLatestBlocks(limit = 5): Promise<BlockInfo[]> {
   const blocks = await csprFetch<{
     data?: Array<{
-      height?: number
-      hash?: string
+      block_height?: number
+      block_hash?: string
       era_id?: number
       timestamp?: string
-      proposer?: string
-      transfers?: unknown[]
-      deploys?: unknown[]
+      proposer_public_key?: string
+      native_transfers_number?: number
+      contract_calls_number?: number
+      large_txn_number?: number
+      medium_txn_number?: number
     }>
   }>(`/blocks?limit=${limit}`)
 
   if (blocks?.data && Array.isArray(blocks.data)) {
     return blocks.data.map((b) => ({
-      height: b.height ?? 0,
-      hash: b.hash ?? "",
+      height: b.block_height ?? 0,
+      hash: b.block_hash ?? "",
       eraId: b.era_id ?? 0,
       timestamp: b.timestamp ?? new Date().toISOString(),
-      proposer: b.proposer ?? null,
-      transactionCount: (b.transfers?.length ?? 0) + (b.deploys?.length ?? 0),
+      proposer: b.proposer_public_key ?? null,
+      transactionCount: (b.native_transfers_number ?? 0) + (b.contract_calls_number ?? 0) + (b.large_txn_number ?? 0) + (b.medium_txn_number ?? 0),
       hasRealData: true,
     }))
   }
