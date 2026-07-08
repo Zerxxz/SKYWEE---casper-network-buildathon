@@ -93,7 +93,10 @@ function shortKey(key: string | null): string | null {
  * The Casper Wallet extension can inject itself in multiple ways depending
  * on version:
  *   - Modern: window.casperWalletProvider (ready-to-use instance)
- *   - Constructor: window.CasperWalletProvider (needs `new`)
+ *   - Factory: window.CasperWalletProvider (function that takes config and
+ *     returns a provider — this is what the actual Casper Wallet extension
+ *     uses as of 2025-2026. Source: console output shows
+ *     `window.CasperWalletProvider = t => { ... return { requestConnection, ... } }`)
  *   - Legacy Signer: window.casperlabsHelper (different API, needs adapter)
  *   - Alt name: window.casperWallet (some forks)
  *   - alt: window.casperwallet
@@ -126,7 +129,7 @@ function detectProvider(): {
   // Deduplicate
   const uniqueGlobals = [...new Set(globals)]
 
-  // 1. Modern Casper Wallet — instance already on window
+  // 1. Modern Casper Wallet — instance already on window (some versions)
   if (window.casperWalletProvider) {
     return {
       provider: window.casperWalletProvider,
@@ -135,10 +138,15 @@ function detectProvider(): {
     }
   }
 
-  // 2. Constructor pattern — some versions inject a class that needs `new`
+  // 2. FACTORY FUNCTION pattern — Casper Wallet extension (2025-2026)
+  // `window.CasperWalletProvider` is an ARROW FUNCTION like:
+  //   t => { ... return { requestConnection, isConnected, signDeploy, ... } }
+  // The argument `t` is the timeout config (number, in ms) — pass undefined
+  // to use defaults. Source: console output from real extension.
   if (typeof window.CasperWalletProvider === "function") {
     try {
-      const instance = new window.CasperWalletProvider()
+      // Try calling as factory function (no args = use defaults)
+      const instance = (window.CasperWalletProvider as unknown as (config?: unknown) => CasperWalletProvider)()
       if (instance && typeof instance.isConnected === "function") {
         return {
           provider: instance,
@@ -146,8 +154,20 @@ function detectProvider(): {
           globals: uniqueGlobals,
         }
       }
-    } catch {
-      // Constructor threw — fall through to other detection methods
+    } catch (e1) {
+      // Factory call failed — try `new` as fallback (older pattern)
+      try {
+        const instance = new window.CasperWalletProvider()
+        if (instance && typeof instance.isConnected === "function") {
+          return {
+            provider: instance,
+            type: "casper-wallet",
+            globals: uniqueGlobals,
+          }
+        }
+      } catch {
+        // Both failed — fall through
+      }
     }
   }
 
@@ -156,7 +176,10 @@ function detectProvider(): {
   const altNames = ["casperWallet", "casperwallet", "CasperWallet"]
   for (const name of altNames) {
     const candidate = w[name]
-    if (candidate && typeof candidate === "object") {
+    if (!candidate) continue
+
+    // If it's an object, check for provider methods
+    if (typeof candidate === "object") {
       const c = candidate as Partial<CasperWalletProvider>
       if (typeof c.isConnected === "function" && typeof c.requestConnection === "function") {
         return {
@@ -164,6 +187,22 @@ function detectProvider(): {
           type: "casper-wallet",
           globals: uniqueGlobals,
         }
+      }
+    }
+
+    // If it's a function (factory), call it
+    if (typeof candidate === "function") {
+      try {
+        const instance = (candidate as unknown as (config?: unknown) => CasperWalletProvider)()
+        if (instance && typeof instance.isConnected === "function") {
+          return {
+            provider: instance,
+            type: "casper-wallet",
+            globals: uniqueGlobals,
+          }
+        }
+      } catch {
+        // ignore
       }
     }
   }
