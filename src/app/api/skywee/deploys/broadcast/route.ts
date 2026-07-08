@@ -14,6 +14,7 @@
 import { db } from "@/lib/db"
 import { ok, err, readJson, generateTxHash, currentBlock, sleep } from "@/lib/skywee/api"
 import { EXPLORER } from "@/lib/skywee/cspr-cloud"
+import { Deploy, PublicKey } from "casper-js-sdk"
 
 export const dynamic = "force-dynamic"
 
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
       console.log("[broadcast] 🔧 Reconstructing signed deploy from unsigned deploy + signature")
 
       try {
-        const { Deploy, PublicKey } = await import("casper-js-sdk")
+        
 
         // Parse the unsigned deploy
         const deploy = Deploy.fromJSON(signedDeployObj.unsignedDeploy as never)
@@ -127,7 +128,7 @@ export async function POST(req: Request) {
     // This ensures the deploy is in the correct format expected by Casper 2.x RPC
     let normalizedDeploy: unknown = deployToBroadcast
     try {
-      const { Deploy } = await import("casper-js-sdk")
+      
       const deployObj = Deploy.fromJSON(deployToBroadcast as never)
       // Convert back to JSON object — this normalizes the format
       const deployJson = Deploy.toJSON(deployObj)
