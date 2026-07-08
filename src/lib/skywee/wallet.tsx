@@ -328,8 +328,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
     const checkConnected = async () => {
       try {
+        // Defensive: not all provider versions have isConnected()
+        if (typeof provider.isConnected !== "function") return
         const connected = await provider.isConnected()
         if (connected) {
+          if (typeof provider.getActivePublicKey !== "function") return
           const key = await provider.getActivePublicKey()
           setState((s) => ({
             ...s,
@@ -345,39 +348,47 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
     checkConnected()
 
-    // Subscribe to events
-    const offConnected = provider.on("connected", async () => {
-      try {
-        const key = await provider.getActivePublicKey()
-        setState((s) => ({
-          ...s,
-          status: "connected",
-          publicKey: key,
-          isDemo: false,
-          error: null,
-        }))
-      } catch (e) {
-        setState((s) => ({ ...s, error: "Failed to read public key" }))
-      }
-    })
+    // Subscribe to events — defensive: some factory-returned providers don't
+    // implement `on()`. Without this check, calling provider.on() throws
+    // `TypeError: e.on is not a function` and breaks the entire wallet flow.
+    const offConnected = typeof provider.on === "function"
+      ? provider.on("connected", async () => {
+          try {
+            const key = await provider.getActivePublicKey()
+            setState((s) => ({
+              ...s,
+              status: "connected",
+              publicKey: key,
+              isDemo: false,
+              error: null,
+            }))
+          } catch (e) {
+            setState((s) => ({ ...s, error: "Failed to read public key" }))
+          }
+        })
+      : undefined
 
-    const offDisconnected = provider.on("disconnected", () => {
-      setState((s) => ({
-        ...s,
-        status: "disconnected",
-        publicKey: null,
-        isDemo: false,
-      }))
-    })
+    const offDisconnected = typeof provider.on === "function"
+      ? provider.on("disconnected", () => {
+          setState((s) => ({
+            ...s,
+            status: "disconnected",
+            publicKey: null,
+            isDemo: false,
+          }))
+        })
+      : undefined
 
-    const offKeyChanged = provider.on("activeKeyChanged", (newKey: string) => {
-      setState((s) => ({
-        ...s,
-        publicKey: newKey,
-        status: "connected",
-        isDemo: false,
-      }))
-    })
+    const offKeyChanged = typeof provider.on === "function"
+      ? provider.on("activeKeyChanged", (newKey: string) => {
+          setState((s) => ({
+            ...s,
+            publicKey: newKey,
+            status: "connected",
+            isDemo: false,
+          }))
+        })
+      : undefined
 
     return () => {
       offConnected?.()
@@ -426,6 +437,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }))
 
     try {
+      // Defensive: ensure required methods exist before calling
+      if (typeof provider.requestConnection !== "function") {
+        throw new Error("Casper Wallet provider missing requestConnection() method")
+      }
       const accepted = await provider.requestConnection()
       if (!accepted) {
         setState((s) => ({
@@ -434,6 +449,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           error: "Connection request rejected by user",
         }))
         return
+      }
+      if (typeof provider.getActivePublicKey !== "function") {
+        throw new Error("Casper Wallet provider missing getActivePublicKey() method")
       }
       const key = await provider.getActivePublicKey()
       setState((s) => ({
@@ -454,7 +472,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const disconnect = React.useCallback(async () => {
     const provider = providerRef.current
-    if (provider && !state.isDemo) {
+    if (provider && !state.isDemo && typeof provider.disconnectFromSite === "function") {
       try {
         await provider.disconnectFromSite()
       } catch {
@@ -507,13 +525,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (!state.publicKey) {
         throw new Error("No active public key")
       }
+      if (typeof provider.signDeploy !== "function") {
+        throw new Error("Casper Wallet provider missing signDeploy() method")
+      }
 
       const result = await provider.signDeploy(deployJson, state.publicKey)
 
-      if (result.cancelled) {
+      if (result?.cancelled) {
         throw new Error("User cancelled the signing request")
       }
-      if (!result.deploy) {
+      if (!result?.deploy) {
         throw new Error("Wallet did not return a signed deploy")
       }
       return result.deploy
