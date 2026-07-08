@@ -129,10 +129,16 @@ export async function POST(req: Request) {
     // Step 2: Strip 0x prefix from ALL hex strings in the deploy
     // Casper RPC rejects "0x" prefix with: "decoding from hex: Invalid byte 'x' at index 1"
     // This applies to: hash, bodyHash, account, approvals[].signer, approvals[].signature,
-    // and any other hex-encoded fields in the deploy structure.
+    // moduleBytes (which may be "0x" for empty bytes), args bytes, etc.
+    //
+    // CRITICAL: regex uses * (zero or more) not + (one or more) because
+    // moduleBytes for standardPayment is "0x" (empty hex with prefix).
+    // Previous regex /^0x[0-9a-fA-F]+$/ missed this case, causing the
+    // "Invalid byte 'x' at index 1" error.
     const stripHexPrefix = (obj: unknown): unknown => {
       if (typeof obj === "string") {
-        if (obj.startsWith("0x") && /^0x[0-9a-fA-F]+$/.test(obj)) {
+        // Match "0x" or "0X" followed by zero or more hex chars
+        if (/^0[xX][0-9a-fA-F]*$/.test(obj)) {
           return obj.slice(2)
         }
         return obj
@@ -151,6 +157,18 @@ export async function POST(req: Request) {
     }
 
     deployToBroadcast = stripHexPrefix(deployToBroadcast) as Record<string, unknown>
+
+    // Verify no 0x prefixes remain
+    const deployStr = JSON.stringify(deployToBroadcast)
+    const remaining0x = deployStr.match(/"0x[0-9a-fA-F]*"/g)
+    if (remaining0x) {
+      console.warn("[broadcast] ⚠️ 0x prefixes still remaining after strip:", remaining0x.slice(0, 5))
+      // Force strip any remaining
+      deployToBroadcast = JSON.parse(deployStr.replace(/"0x([0-9a-fA-F]*)"/g, '"$1"')) as Record<string, unknown>
+      console.log("[broadcast] Force-stripped remaining 0x prefixes")
+    } else {
+      console.log("[broadcast] ✅ No 0x prefixes in deploy JSON")
+    }
 
     // Step 3: Log deploy structure
     console.log("[broadcast] Deploy keys:", Object.keys(deployToBroadcast))
