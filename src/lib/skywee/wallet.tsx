@@ -525,19 +525,62 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (!state.publicKey) {
         throw new Error("No active public key")
       }
-      if (typeof provider.signDeploy !== "function") {
-        throw new Error("Casper Wallet provider missing signDeploy() method")
+
+      // Defensive: check available methods on provider
+      const availableMethods = Object.keys(provider).filter(
+        (k) => typeof (provider as unknown as Record<string, unknown>)[k] === "function",
+      )
+      console.log("[SKYWEE] Casper Wallet provider methods:", availableMethods)
+      console.log("[SKYWEE] Looking for signDeploy method...")
+
+      // Try multiple known method names for signing deploys
+      // (different extension versions use different names)
+      const signMethods = [
+        "signDeploy",
+        "sign",          // some versions
+        "signMessage",   // fallback for message signing
+        "requestSignDeploy",
+        "sendDeploy",
+      ]
+
+      let signMethod: string | null = null
+      for (const m of signMethods) {
+        if (typeof (provider as unknown as Record<string, (...args: unknown[]) => unknown>)[m] === "function") {
+          signMethod = m
+          console.log(`[SKYWEE] Found signing method: ${m}`)
+          break
+        }
       }
 
-      const result = await provider.signDeploy(deployJson, state.publicKey)
+      if (!signMethod) {
+        // Log all available methods for debugging
+        console.error("[SKYWEE] No signDeploy method found. Available methods:", availableMethods)
+        console.error("[SKYWEE] Provider object:", provider)
+        throw new Error(
+          `Casper Wallet provider missing signDeploy() method. ` +
+          `Available methods: ${availableMethods.join(", ") || "(none)"}. ` +
+          `Open DevTools console (F12) for details. ` +
+          `Your extension may need updating from https://www.casperwallet.io/`
+        )
+      }
 
-      if (result?.cancelled) {
+      // Call the signing method
+      const providerAny = provider as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>
+      const result = await providerAny[signMethod](deployJson, state.publicKey)
+
+      // Handle different result shapes
+      const resultObj = result as { cancelled?: boolean; deploy?: unknown; signed?: unknown; signature?: unknown }
+
+      if (resultObj?.cancelled) {
         throw new Error("User cancelled the signing request")
       }
-      if (!result?.deploy) {
+
+      // Return deploy object (try multiple result keys)
+      const signedDeploy = resultObj?.deploy ?? resultObj?.signed ?? resultObj?.signature ?? result
+      if (!signedDeploy) {
         throw new Error("Wallet did not return a signed deploy")
       }
-      return result.deploy
+      return signedDeploy
     },
     [state.isDemo, state.publicKey],
   )
