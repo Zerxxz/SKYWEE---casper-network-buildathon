@@ -2,11 +2,48 @@
 
 import * as React from "react"
 import { motion } from "framer-motion"
-import { Zap, ArrowRight, Github } from "lucide-react"
+import {
+  Zap,
+  ArrowRight,
+  Github,
+  Bot,
+  ShieldCheck,
+  Users,
+  Layers,
+  Leaf,
+} from "lucide-react"
 
 interface LandingPageProps {
   onEnter: () => void
 }
+
+const MODULES = [
+  {
+    icon: Bot,
+    name: "AgentSquare",
+    desc: "Agent-to-agent economy with x402 payments",
+  },
+  {
+    icon: ShieldCheck,
+    name: "Aegis",
+    desc: "Parametric insurance for RWA",
+  },
+  {
+    icon: Users,
+    name: "SwarmTreasury",
+    desc: "Multi-agent DAO execution",
+  },
+  {
+    icon: Layers,
+    name: "RWA-X Vault",
+    desc: "Agent-managed RWA fractionalization",
+  },
+  {
+    icon: Leaf,
+    name: "CarbonGuard",
+    desc: "Autonomous carbon verification",
+  },
+] as const
 
 export function LandingPage({ onEnter }: LandingPageProps) {
   return (
@@ -153,24 +190,55 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           </p>
         </motion.div>
 
-        {/* Module ticker / marquee */}
+        {/* Marquee ticker */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.5 }}
-          className="mt-12 w-full max-w-3xl"
+          className="mt-8 w-full max-w-3xl overflow-hidden relative"
+          aria-hidden="true"
         >
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground/50">
-            <span>AgentSquare</span>
-            <span className="text-muted-foreground/30">·</span>
-            <span>Aegis</span>
-            <span className="text-muted-foreground/30">·</span>
-            <span>SwarmTreasury</span>
-            <span className="text-muted-foreground/30">·</span>
-            <span>RWA-X Vault</span>
-            <span className="text-muted-foreground/30">·</span>
-            <span>CarbonGuard</span>
+          <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
+          <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
+          <div className="skywee-landing-marquee">
+            <span className="text-sm font-mono text-muted-foreground/50 whitespace-nowrap">
+              The Agentic Web3 OS, at a glance&nbsp;&nbsp;·&nbsp;&nbsp;
+              The Agentic Web3 OS, at a glance&nbsp;&nbsp;·&nbsp;&nbsp;
+              The Agentic Web3 OS, at a glance&nbsp;&nbsp;·&nbsp;&nbsp;
+              The Agentic Web3 OS, at a glance&nbsp;&nbsp;·&nbsp;&nbsp;
+              The Agentic Web3 OS, at a glance&nbsp;&nbsp;·&nbsp;&nbsp;
+              The Agentic Web3 OS, at a glance&nbsp;&nbsp;·&nbsp;&nbsp;
+            </span>
           </div>
+        </motion.div>
+
+        {/* 5 Module cards */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.6 }}
+          className="mt-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full max-w-4xl"
+        >
+          {MODULES.map((m, i) => {
+            const Icon = m.icon
+            return (
+              <motion.div
+                key={m.name}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.7 + i * 0.08 }}
+                className="rounded-xl skywee-glass p-4 hover:bg-foreground/[0.05] transition-colors group cursor-default"
+              >
+                <div className="h-9 w-9 rounded-lg skywee-hairline bg-foreground/[0.03] grid place-items-center mb-3 group-hover:scale-105 transition-transform">
+                  <Icon size={16} />
+                </div>
+                <div className="text-sm font-semibold">{m.name}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">
+                  {m.desc}
+                </div>
+              </motion.div>
+            )
+          })}
         </motion.div>
       </main>
 

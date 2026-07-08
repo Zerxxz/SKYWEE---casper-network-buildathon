@@ -587,3 +587,140 @@ html:not(.light):not(.dark) {
   --sidebar-ring: oklch(0.985 0 0);
   color-scheme: dark;
 }
+
+/* ================================================================
+   SKYWEE Landing Page — glass shine, aura, marquee animations
+   (restored from skywee-agentic.vercel.app reference)
+   ================================================================ */
+
+/* Aura around CTA button */
+.skywee-aura-ring {
+  border: 1.5px solid var(--foreground);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 12px;
+  animation: 2.5s ease-out infinite skywee-aura-pulse-ring;
+  position: absolute;
+  inset: -4px;
+}
+
+.skywee-aura-ring:first-child {
+  animation-delay: 0s;
+}
+
+.skywee-aura-glow {
+  background: radial-gradient(circle at center, var(--foreground) 0%, transparent 70%);
+  opacity: 0.12;
+  filter: blur(12px);
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 20px;
+  animation: 3s ease-in-out infinite skywee-aura-breathe;
+  position: absolute;
+  inset: -20px;
+}
+
+/* Glass shine sweep on logo */
+.skywee-glass-shine-wrapper {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.skywee-glass-shine {
+  pointer-events: none;
+  z-index: 2;
+  background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0) 35%, rgba(255, 255, 255, 0.7) 50%, rgba(255, 255, 255, 0) 65%, transparent 100%);
+  width: 60%;
+  height: 100%;
+  animation: 4s ease-in-out 1s infinite skywee-glass-sweep;
+  position: absolute;
+  top: 0;
+  left: -150%;
+  transform: skew(-20deg);
+}
+
+/* Glass shine sweep on SKYWEE title text */
+.skywee-glass-shine-text {
+  position: relative;
+  overflow: hidden;
+}
+
+.skywee-glass-shine-text > span:first-child {
+  background: linear-gradient(180deg, var(--foreground) 0%, var(--foreground) 40%, color-mix(in oklch, var(--foreground) 70%, white 30%) 50%, var(--foreground) 60%, var(--foreground) 100%);
+  -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.skywee-glass-shine-text-overlay {
+  pointer-events: none;
+  z-index: 5;
+  background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0) 70%, transparent 100%);
+  width: 50%;
+  height: 100%;
+  animation: 5s ease-in-out 2s infinite skywee-text-glass-sweep;
+  position: absolute;
+  top: 0;
+  left: -120%;
+  transform: skew(-20deg);
+}
+
+/* Marquee ticker on landing */
+.skywee-landing-marquee {
+  animation: 60s linear infinite skywee-marquee-scroll;
+}
+
+.skywee-landing-marquee > span {
+  display: inline-block;
+}
+
+/* Generic marquee (used elsewhere) */
+.skywee-marquee {
+  animation: 60s linear infinite skywee-marquee-scroll;
+}
+
+/* Keyframes */
+@keyframes skywee-aura-pulse-ring {
+  0% { opacity: 0.5; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+@keyframes skywee-aura-breathe {
+  0%, 100% { opacity: 0.08; transform: scale(1); }
+  50% { opacity: 0.18; transform: scale(1.08); }
+}
+
+@keyframes skywee-glass-sweep {
+  0% { left: -150%; }
+  40% { left: 150%; }
+  100% { left: 150%; }
+}
+
+@keyframes skywee-text-glass-sweep {
+  0% { left: -120%; }
+  35% { left: 120%; }
+  100% { left: 120%; }
+}
+
+@keyframes skywee-marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .skywee-aura-ring,
+  .skywee-aura-glow,
+  .skywee-glass-shine,
+  .skywee-glass-shine-text-overlay,
+  .skywee-landing-marquee,
+  .skywee-marquee {
+    animation: none;
+  }
+  .skywee-glass-shine,
+  .skywee-glass-shine-text-overlay {
+    display: none;
+  }
+}
