@@ -62,18 +62,81 @@ export async function POST(req: Request) {
         const deploy = Deploy.fromJSON(signedDeployObj.unsignedDeploy as never)
         console.log("[broadcast] Parsed unsigned deploy successfully")
 
-        // Parse the signature — it might be hex string or bytes
+        // Parse the signature — Casper Wallet may return it in multiple formats:
+        //   1. Hex string: "0xabc123..." or "abc123..."
+        //   2. Uint8Array: raw bytes
+        //   3. Object with signature in a sub-field:
+        //      { signature: "hex..." }
+        //      { sig: "hex..." }
+        //      { bytes: "hex..." }
+        //      { data: "hex..." }
+        //      { signature: Uint8Array }
         let signatureBytes: Uint8Array
         const sig = signedDeployObj.signature
-        if (typeof sig === "string") {
-          // Hex string — remove 0x prefix if present
-          const hex = sig.startsWith("0x") ? sig.slice(2) : sig
-          signatureBytes = new Uint8Array(hex.length / 2)
-          for (let i = 0; i < signatureBytes.length; i++) {
-            signatureBytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+        console.log("[broadcast] Signature raw type:", typeof sig)
+        console.log("[broadcast] Signature raw value (truncated):", JSON.stringify(sig).substring(0, 200))
+
+        // Helper: hex string → Uint8Array
+        const hexToBytes = (hex: string): Uint8Array => {
+          const clean = hex.startsWith("0x") ? hex.slice(2) : hex
+          const bytes = new Uint8Array(clean.length / 2)
+          for (let i = 0; i < bytes.length; i++) {
+            bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16)
           }
+          return bytes
+        }
+
+        if (typeof sig === "string") {
+          // Hex string
+          signatureBytes = hexToBytes(sig)
+          console.log("[broadcast] Parsed signature from hex string")
         } else if (sig instanceof Uint8Array) {
           signatureBytes = sig
+          console.log("[broadcast] Parsed signature from Uint8Array")
+        } else if (sig && typeof sig === "object") {
+          // Object — try common field names
+          const sigObj = sig as Record<string, unknown>
+          console.log("[broadcast] Signature object keys:", Object.keys(sigObj))
+
+          // Try each possible field name that might contain the signature
+          const possibleFields = ["signature", "sig", "bytes", "data", "value", "raw"]
+          let found = false
+          for (const field of possibleFields) {
+            const val = sigObj[field]
+            if (typeof val === "string") {
+              signatureBytes = hexToBytes(val)
+              console.log(`[broadcast] Parsed signature from object field '${field}' (hex string)`)
+              found = true
+              break
+            } else if (val instanceof Uint8Array) {
+              signatureBytes = val
+              console.log(`[broadcast] Parsed signature from object field '${field}' (Uint8Array)`)
+              found = true
+              break
+            } else if (Array.isArray(val)) {
+              // Number array → Uint8Array
+              signatureBytes = new Uint8Array(val as number[])
+              console.log(`[broadcast] Parsed signature from object field '${field}' (number array)`)
+              found = true
+              break
+            }
+          }
+
+          if (!found) {
+            // Last resort: stringify the object and try to extract hex
+            const sigStr = JSON.stringify(sig)
+            // Look for a hex pattern (64+ hex chars, possibly with 0x prefix)
+            const hexMatch = sigStr.match(/0x([a-fA-F0-9]{64,})/) || sigStr.match(/([a-fA-F0-9]{64,})/)
+            if (hexMatch) {
+              signatureBytes = hexToBytes(hexMatch[1])
+              console.log("[broadcast] Extracted signature hex from object stringification")
+            } else {
+              throw new Error(
+                `Could not extract signature from object. Keys: ${Object.keys(sigObj).join(", ")}. ` +
+                `Full object: ${sigStr.substring(0, 300)}`
+              )
+            }
+          }
         } else {
           throw new Error(`Unexpected signature type: ${typeof sig}`)
         }
