@@ -564,15 +564,37 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         )
       }
 
+      // Convert deployJson to string for the wallet extension.
+      // Casper Wallet's sign/signDeploy method expects a JSON STRING, not an object.
+      // Error from extension: "Desploy json string parse error"
+      // This happens when we pass an object — the extension tries to parse it as string.
+      let deployStr: string
+      if (typeof deployJson === "string") {
+        deployStr = deployJson
+      } else {
+        try {
+          deployStr = JSON.stringify(deployJson)
+        } catch (e) {
+          throw new Error(`Failed to serialize deploy JSON: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+      console.log("[SKYWEE] Calling sign method with deploy string (length:", deployStr.length, "chars)")
+
       // Call the signing method
       const providerAny = provider as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>
-      const result = await providerAny[signMethod](deployJson, state.publicKey)
+      const result = await providerAny[signMethod](deployStr, state.publicKey)
+
+      console.log("[SKYWEE] Sign result:", result)
 
       // Handle different result shapes
-      const resultObj = result as { cancelled?: boolean; deploy?: unknown; signed?: unknown; signature?: unknown }
+      const resultObj = result as { cancelled?: boolean; deploy?: unknown; signed?: unknown; signature?: unknown; error?: string }
 
       if (resultObj?.cancelled) {
         throw new Error("User cancelled the signing request")
+      }
+
+      if (resultObj?.error) {
+        throw new Error(`Wallet error: ${resultObj.error}`)
       }
 
       // Return deploy object (try multiple result keys)
