@@ -94,46 +94,71 @@ export async function POST(req: Request) {
           signatureBytes = sig
           console.log("[broadcast] Parsed signature from Uint8Array")
         } else if (sig && typeof sig === "object") {
-          // Object — try common field names
+          // Object — could be:
+          //   1. { signature: "hex..." } or similar sub-field
+          //   2. Serialized Uint8Array: { "0": 253, "1": 224, "2": 200, ... }
+          //      (this happens when JSON.stringify(Uint8Array) is sent over the wire)
+          //   3. Array: [253, 224, 200, ...]
           const sigObj = sig as Record<string, unknown>
           console.log("[broadcast] Signature object keys:", Object.keys(sigObj))
 
-          // Try each possible field name that might contain the signature
-          const possibleFields = ["signature", "sig", "bytes", "data", "value", "raw"]
-          let found = false
-          for (const field of possibleFields) {
-            const val = sigObj[field]
-            if (typeof val === "string") {
-              signatureBytes = hexToBytes(val)
-              console.log(`[broadcast] Parsed signature from object field '${field}' (hex string)`)
-              found = true
-              break
-            } else if (val instanceof Uint8Array) {
-              signatureBytes = val
-              console.log(`[broadcast] Parsed signature from object field '${field}' (Uint8Array)`)
-              found = true
-              break
-            } else if (Array.isArray(val)) {
-              // Number array → Uint8Array
-              signatureBytes = new Uint8Array(val as number[])
-              console.log(`[broadcast] Parsed signature from object field '${field}' (number array)`)
-              found = true
-              break
+          // Check if this is a serialized Uint8Array (numeric keys 0,1,2,3...)
+          const keys = Object.keys(sigObj)
+          const isSerializedBytes = keys.length > 0 && keys.every((k) => /^\d+$/.test(k))
+          if (isSerializedBytes) {
+            // Convert { "0": 253, "1": 224, ... } → Uint8Array
+            const len = keys.length
+            signatureBytes = new Uint8Array(len)
+            for (let i = 0; i < len; i++) {
+              signatureBytes[i] = sigObj[String(i)] as number
             }
-          }
+            console.log("[broadcast] Parsed signature from serialized Uint8Array (numeric keys)")
+          } else if (Array.isArray(sig)) {
+            // Plain number array
+            signatureBytes = new Uint8Array(sig as number[])
+            console.log("[broadcast] Parsed signature from number array")
+          } else {
+            // Try common field names that might contain the signature
+            const possibleFields = ["signature", "sig", "bytes", "data", "value", "raw"]
+            let found = false
+            for (const field of possibleFields) {
+              const val = sigObj[field]
+              if (typeof val === "string") {
+                signatureBytes = hexToBytes(val)
+                console.log(`[broadcast] Parsed signature from object field '${field}' (hex string)`)
+                found = true
+                break
+              } else if (val instanceof Uint8Array) {
+                signatureBytes = val
+                console.log(`[broadcast] Parsed signature from object field '${field}' (Uint8Array)`)
+                found = true
+                break
+              } else if (Array.isArray(val)) {
+                signatureBytes = new Uint8Array(val as number[])
+                console.log(`[broadcast] Parsed signature from object field '${field}' (number array)`)
+                found = true
+                break
+              } else if (val && typeof val === "object") {
+                // Nested serialized bytes
+                const nestedKeys = Object.keys(val as Record<string, unknown>)
+                const isNestedBytes = nestedKeys.length > 0 && nestedKeys.every((k) => /^\d+$/.test(k))
+                if (isNestedBytes) {
+                  const nested = val as Record<string, number>
+                  signatureBytes = new Uint8Array(nestedKeys.length)
+                  for (let i = 0; i < nestedKeys.length; i++) {
+                    signatureBytes[i] = nested[String(i)]
+                  }
+                  console.log(`[broadcast] Parsed signature from object field '${field}' (nested bytes)`)
+                  found = true
+                  break
+                }
+              }
+            }
 
-          if (!found) {
-            // Last resort: stringify the object and try to extract hex
-            const sigStr = JSON.stringify(sig)
-            // Look for a hex pattern (64+ hex chars, possibly with 0x prefix)
-            const hexMatch = sigStr.match(/0x([a-fA-F0-9]{64,})/) || sigStr.match(/([a-fA-F0-9]{64,})/)
-            if (hexMatch) {
-              signatureBytes = hexToBytes(hexMatch[1])
-              console.log("[broadcast] Extracted signature hex from object stringification")
-            } else {
+            if (!found) {
               throw new Error(
-                `Could not extract signature from object. Keys: ${Object.keys(sigObj).join(", ")}. ` +
-                `Full object: ${sigStr.substring(0, 300)}`
+                `Could not extract signature from object. Keys: ${keys.join(", ")}. ` +
+                `Full object: ${JSON.stringify(sig).substring(0, 300)}`
               )
             }
           }
