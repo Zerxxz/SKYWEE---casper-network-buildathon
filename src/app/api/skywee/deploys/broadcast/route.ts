@@ -68,6 +68,31 @@ export async function POST(req: Request) {
       console.log("[broadcast] Has payment:", "payment" in deployObj)
       console.log("[broadcast] Has session:", "session" in deployObj)
       console.log("[broadcast] Has approvals:", "approvals" in deployObj)
+
+      // Log full deploy structure (truncated) for debugging
+      try {
+        const deployStr = JSON.stringify(deployToBroadcast)
+        console.log("[broadcast] Full deploy JSON (first 1000 chars):", deployStr.substring(0, 1000))
+        console.log("[broadcast] Full deploy JSON length:", deployStr.length, "chars")
+      } catch {
+        console.log("[broadcast] Could not stringify deploy")
+      }
+    }
+
+    // Normalize the deploy format using the SDK's Deploy.fromJSON
+    // This ensures the deploy is in the correct format expected by Casper 2.x RPC
+    let normalizedDeploy: unknown = deployToBroadcast
+    try {
+      const { Deploy } = await import("casper-js-sdk")
+      const deployObj = Deploy.fromJSON(deployToBroadcast as never)
+      // Convert back to JSON object — this normalizes the format
+      const deployJson = Deploy.toJSON(deployObj)
+      normalizedDeploy = typeof deployJson === "string" ? JSON.parse(deployJson) : deployJson
+      console.log("[broadcast] ✅ Deploy normalized via SDK Deploy.fromJSON + toJSON")
+      console.log("[broadcast] Normalized deploy keys:", Object.keys(normalizedDeploy as object))
+    } catch (e) {
+      console.warn("[broadcast] SDK normalization failed, using raw deploy:", e instanceof Error ? e.message : String(e))
+      // Continue with raw deploy
     }
 
     // Use raw fetch to RPC — more reliable than SDK for Casper 2.x
@@ -76,7 +101,7 @@ export async function POST(req: Request) {
       jsonrpc: "2.0",
       id: 1,
       method: "account_put_deploy",
-      params: [deployToBroadcast],
+      params: [normalizedDeploy],
     }
 
     console.log("[broadcast] Sending to RPC:", RPC_URL)
