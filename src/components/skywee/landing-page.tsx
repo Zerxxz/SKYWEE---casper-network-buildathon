@@ -50,30 +50,51 @@ const MODULES = [
 ] as const
 
 export function LandingPage({ onEnter }: LandingPageProps) {
-  const { connect, status, isExtensionInstalled, error, enterDemoMode } = useWallet()
+  const {
+    connect,
+    status,
+    isExtensionInstalled,
+    error,
+    enterDemoMode,
+    recheckExtension,
+    detectedGlobals,
+    providerType,
+  } = useWallet()
   const [connecting, setConnecting] = React.useState(false)
+  const [showDebug, setShowDebug] = React.useState(false)
 
   // Handle "Connect Casper Wallet" click — triggers extension popup.
-  // On success, the wallet's `connected` event fires (handled in wallet.tsx),
-  // which sets status to "connected". We then call onEnter() to enter dashboard.
-  // On rejection/cancel, status returns to "disconnected" — user stays on landing.
+  // On success, status becomes "connected" and we enter the dashboard.
+  // On failure (no extension / user cancel), we stay on landing + show error.
+  // We do NOT auto-fallback to demo mode — user must explicitly click
+  // "Try Demo Mode" if they want demo.
   const handleConnect = React.useCallback(async () => {
     setConnecting(true)
     try {
       await connect()
-      // If connect succeeded (extension returned a public key), enter dashboard.
-      // We use a microtask delay so the wallet state propagates.
-      // The connect() function already sets status to "connected" on success.
-      // If it fell back to demo (no extension), still enter dashboard.
+      // Only enter dashboard if connection actually succeeded.
+      // We check status after a short delay to let the wallet state propagate.
       setTimeout(() => {
-        onEnter()
-      }, 200)
+        // Read the latest status via a custom event check — but since we don't
+        // have direct access here, we rely on the wallet context updating.
+        // The connect() function already set status to "connected" on success
+        // or "disconnected" on failure. We enter dashboard only if connected.
+        // Use a microtask to access updated state.
+      }, 100)
     } catch (e) {
       console.error("Wallet connect failed:", e)
     } finally {
       setConnecting(false)
     }
-  }, [connect, onEnter])
+  }, [connect])
+
+  // Enter dashboard only when wallet status becomes "connected"
+  // (either via explicit connect or via extension auto-connect on page load).
+  React.useEffect(() => {
+    if (status === "connected") {
+      onEnter()
+    }
+  }, [status, onEnter])
 
   // Handle "Try Demo Mode" — explicitly enters demo mode, then enters dashboard.
   // This bypasses the Casper Wallet extension entirely.
@@ -81,6 +102,11 @@ export function LandingPage({ onEnter }: LandingPageProps) {
     enterDemoMode()
     onEnter()
   }, [enterDemoMode, onEnter])
+
+  // Handle "Retry" — force re-detect extension
+  const handleRetry = React.useCallback(() => {
+    recheckExtension()
+  }, [recheckExtension])
 
   return (
     <div className="relative min-h-screen flex flex-col bg-background overflow-hidden">
@@ -234,40 +260,96 @@ export function LandingPage({ onEnter }: LandingPageProps) {
             </div>
           </div>
 
-          {/* Extension not installed warning */}
-          {!isExtensionInstalled && (
+          {/* Extension not installed warning OR provider detected confirmation */}
+          {!isExtensionInstalled && !error && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
-              className="flex items-center gap-2 text-[11px] text-muted-foreground max-w-md text-center"
+              className="flex items-start gap-2 text-[11px] text-muted-foreground max-w-md text-center px-4"
             >
-              <AlertCircle size={11} className="flex-shrink-0" />
+              <AlertCircle size={11} className="flex-shrink-0 mt-0.5" />
               <span>
                 Casper Wallet extension not detected.{" "}
                 <a
                   href="https://www.casperwallet.io/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline hover:text-foreground"
+                  className="underline hover:text-foreground font-semibold"
                 >
                   Install it here
                 </a>{" "}
-                for real on-chain deploys, or try demo mode below.
+                for real on-chain deploys, then refresh this page. Or try demo mode below.
               </span>
             </motion.div>
           )}
 
-          {/* Error message */}
+          {/* Extension detected confirmation */}
+          {isExtensionInstalled && !error && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center gap-2 text-[11px] text-green-600 dark:text-green-400 font-mono"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500 skywee-pulse-dot" />
+              <span>Casper Wallet detected — click the button above to connect</span>
+            </motion.div>
+          )}
+
+          {/* Error message with retry */}
           {error && (
-            <div className="text-[11px] text-red-500 font-mono">{error}</div>
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center gap-2 max-w-md"
+            >
+              <div className="flex items-start gap-2 text-[11px] text-red-500 font-mono px-4 py-2 rounded-md bg-red-500/10 border border-red-500/30">
+                <AlertCircle size={11} className="flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="text-[10px] font-mono px-3 py-1 rounded skywee-hairline bg-foreground/[0.03] hover:bg-foreground/[0.07] transition-colors"
+              >
+                ↻ Retry detection
+              </button>
+            </motion.div>
+          )}
+
+          {/* Debug toggle (small, bottom) */}
+          <button
+            type="button"
+            onClick={() => setShowDebug((v) => !v)}
+            className="text-[9px] font-mono text-muted-foreground/40 hover:text-muted-foreground transition-colors mt-2"
+          >
+            {showDebug ? "▼" : "▶"} debug
+          </button>
+
+          {/* Debug panel */}
+          {showDebug && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="text-[10px] font-mono text-muted-foreground/70 skywee-hairline bg-foreground/[0.02] rounded-md p-3 max-w-md w-full"
+            >
+              <div>providerType: <span className="text-foreground">{providerType}</span></div>
+              <div>isExtensionInstalled: <span className="text-foreground">{String(isExtensionInstalled)}</span></div>
+              <div>status: <span className="text-foreground">{status}</span></div>
+              <div>detectedGlobals: <span className="text-foreground">{detectedGlobals.length ? detectedGlobals.join(", ") : "(none)"}</span></div>
+              <div className="mt-2 text-muted-foreground/50">
+                Expected: casperWalletProvider (modern Casper Wallet)
+                <br />
+                Also checked: CasperWalletProvider (constructor), casperlabsHelper (legacy Signer)
+              </div>
+            </motion.div>
           )}
 
           {/* Secondary: Try Demo Mode */}
           <button
             type="button"
             onClick={handleDemo}
-            className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors font-mono"
+            className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors font-mono mt-2"
           >
             or try demo mode →
           </button>
