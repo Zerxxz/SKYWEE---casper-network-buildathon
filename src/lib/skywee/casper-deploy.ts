@@ -111,17 +111,31 @@ const NETWORK_NAME = process.env.CASPER_NETWORK_NAME ?? process.env.CASPER_CHAIN
 // Default TTL: 30 minutes (Casper testnet cap is 1 day).
 const DEFAULT_DEPLOY_TTL_MS = 30 * 60 * 1000
 
-const CONTRACT_HASHES: Record<string, string | undefined> = {
-  agent_registry: process.env.CONTRACT_AGENT_REGISTRY,
-  insurance: process.env.CONTRACT_INSURANCE,
-  treasury: process.env.CONTRACT_TREASURY,
-  rwa_vault: process.env.CONTRACT_RWA_VAULT,
-  carbon_guard: process.env.CONTRACT_CARBON_GUARD,
+// Contract hashes — LIVE on Casper Testnet, verified 2026-07-07.
+// These are PUBLIC values (visible on cspr.live explorer).
+// Used as fallback when NEXT_PUBLIC_ env vars are not set.
+// Source: contracts.deployed.json
+const LIVE_CONTRACT_HASHES: Record<string, string> = {
+  agent_registry: "hash-8ddaf7548dfc4505aed7a62a3d4c3fa4936ab8797771988cc6d560eed99b3ded",
+  insurance: "hash-b4d195a93712eb2f801549901756b1accb899b8f76d27bff57162ffec3d92b06",
+  treasury: "hash-45e1049d82b95dd82119c7462f2d90a4bbf5f1978e3336cf6ba3437f7540bcee",
+  rwa_vault: "hash-4898c97682442a9929e36b735cd645f42aa489540f07e9061f117e3f4cc50b21",
+  carbon_guard: "hash-3cbe0c274dd0728cf626c26aad333647b657d6ab0548aef983688271fffed63f",
+}
+
+// Try NEXT_PUBLIC_ env vars first (client-side accessible), then fall back
+// to hardcoded live values.
+const CONTRACT_HASHES: Record<string, string> = {
+  agent_registry: process.env.NEXT_PUBLIC_CONTRACT_AGENT_REGISTRY ?? LIVE_CONTRACT_HASHES.agent_registry,
+  insurance: process.env.NEXT_PUBLIC_CONTRACT_INSURANCE ?? LIVE_CONTRACT_HASHES.insurance,
+  treasury: process.env.NEXT_PUBLIC_CONTRACT_TREASURY ?? LIVE_CONTRACT_HASHES.treasury,
+  rwa_vault: process.env.NEXT_PUBLIC_CONTRACT_RWA_VAULT ?? LIVE_CONTRACT_HASHES.rwa_vault,
+  carbon_guard: process.env.NEXT_PUBLIC_CONTRACT_CARBON_GUARD ?? LIVE_CONTRACT_HASHES.carbon_guard,
 }
 
 export function isRealDeployMode(): boolean {
-  // Real deploy mode requires: at least one contract hash configured
-  // AND the RPC URL set (even if not reachable from this sandbox).
+  // Real deploy mode is always true now — contract hashes are hardcoded
+  // as fallback (verified live on Casper Testnet 2026-07-07).
   return Object.values(CONTRACT_HASHES).some((h) => !!h)
 }
 
