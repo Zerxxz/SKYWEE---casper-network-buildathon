@@ -13,7 +13,14 @@ import { StackPage } from "@/components/skywee/pages/stack"
 import { BuildathonPage } from "@/components/skywee/pages/buildathon"
 
 export default function Home() {
-  // Landing page state — user starts on landing, clicks "Get Started" to enter dashboard
+  // Landing page state — user starts on landing.
+  // Two entry paths (handled inside LandingPage):
+  //   1. "Connect Casper Wallet" → triggers Casper Wallet extension popup →
+  //      on success, enters dashboard with wallet connected (real on-chain mode).
+  //      If no extension installed, falls back to demo mode automatically.
+  //   2. "Try Demo Mode" → enters dashboard in demo mode (no wallet required).
+  // The wallet state (connected vs demo) is managed by WalletProvider —
+  // page.tsx just tracks whether the user has entered the dashboard.
   const [entered, setEntered] = React.useState(false)
   const [page, setPage] = React.useState<PageId>("dashboard")
 
@@ -24,12 +31,16 @@ export default function Home() {
     }
   }, [])
 
+  const handleEnter = React.useCallback(() => {
+    setEntered(true)
+  }, [])
+
   // Show landing page first
   if (!entered) {
-    return <LandingPage onEnter={() => setEntered(true)} />
+    return <LandingPage onEnter={handleEnter} />
   }
 
-  // After "Get Started", show dashboard with sidebar
+  // After entering, show dashboard with sidebar
   return (
     <SidebarLayout active={page} onNavigate={handleNavigate}>
       {page === "dashboard" && <DashboardPage onNavigate={handleNavigate} />}

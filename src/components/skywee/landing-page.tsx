@@ -11,7 +11,11 @@ import {
   Users,
   Layers,
   Leaf,
+  Wallet,
+  AlertCircle,
+  Loader2,
 } from "lucide-react"
+import { useWallet } from "@/lib/skywee/wallet"
 
 interface LandingPageProps {
   onEnter: () => void
@@ -46,6 +50,38 @@ const MODULES = [
 ] as const
 
 export function LandingPage({ onEnter }: LandingPageProps) {
+  const { connect, status, isExtensionInstalled, error, enterDemoMode } = useWallet()
+  const [connecting, setConnecting] = React.useState(false)
+
+  // Handle "Connect Casper Wallet" click — triggers extension popup.
+  // On success, the wallet's `connected` event fires (handled in wallet.tsx),
+  // which sets status to "connected". We then call onEnter() to enter dashboard.
+  // On rejection/cancel, status returns to "disconnected" — user stays on landing.
+  const handleConnect = React.useCallback(async () => {
+    setConnecting(true)
+    try {
+      await connect()
+      // If connect succeeded (extension returned a public key), enter dashboard.
+      // We use a microtask delay so the wallet state propagates.
+      // The connect() function already sets status to "connected" on success.
+      // If it fell back to demo (no extension), still enter dashboard.
+      setTimeout(() => {
+        onEnter()
+      }, 200)
+    } catch (e) {
+      console.error("Wallet connect failed:", e)
+    } finally {
+      setConnecting(false)
+    }
+  }, [connect, onEnter])
+
+  // Handle "Try Demo Mode" — explicitly enters demo mode, then enters dashboard.
+  // This bypasses the Casper Wallet extension entirely.
+  const handleDemo = React.useCallback(() => {
+    enterDemoMode()
+    onEnter()
+  }, [enterDemoMode, onEnter])
+
   return (
     <div className="relative min-h-screen flex flex-col bg-background overflow-hidden">
       {/* Background effects */}
@@ -161,33 +197,80 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           in one autonomous platform.
         </motion.p>
 
-        {/* CTA */}
+        {/* CTAs — Connect Casper Wallet (primary) + Try Demo Mode (secondary) */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.3 }}
-          className="mt-10 flex flex-col items-center gap-3"
+          className="mt-10 flex flex-col items-center gap-4"
         >
+          {/* Primary: Connect Casper Wallet */}
           <div className="inline-block">
             <div className="relative">
               <div className="skywee-aura-ring" aria-hidden="true" />
               <div className="skywee-aura-glow" aria-hidden="true" />
               <button
                 type="button"
-                onClick={onEnter}
+                onClick={handleConnect}
+                disabled={connecting || status === "connecting"}
                 className="group relative inline-flex items-center gap-2.5 px-8 py-4 bg-primary text-primary-foreground rounded-lg text-base font-bold hover:opacity-90 transition-all disabled:opacity-70 z-10"
               >
-                <span>Get Started</span>
-                <ArrowRight
-                  size={18}
-                  className="group-hover:translate-x-0.5 transition-transform"
-                />
+                {connecting || status === "connecting" ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Connecting…</span>
+                  </>
+                ) : (
+                  <>
+                    <Wallet size={18} />
+                    <span>Connect Casper Wallet</span>
+                    <ArrowRight
+                      size={18}
+                      className="group-hover:translate-x-0.5 transition-transform"
+                    />
+                  </>
+                )}
               </button>
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground/60 font-mono">
-            Connect your Casper Wallet to enter
-          </p>
+
+          {/* Extension not installed warning */}
+          {!isExtensionInstalled && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="flex items-center gap-2 text-[11px] text-muted-foreground max-w-md text-center"
+            >
+              <AlertCircle size={11} className="flex-shrink-0" />
+              <span>
+                Casper Wallet extension not detected.{" "}
+                <a
+                  href="https://www.casperwallet.io/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  Install it here
+                </a>{" "}
+                for real on-chain deploys, or try demo mode below.
+              </span>
+            </motion.div>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <div className="text-[11px] text-red-500 font-mono">{error}</div>
+          )}
+
+          {/* Secondary: Try Demo Mode */}
+          <button
+            type="button"
+            onClick={handleDemo}
+            className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors font-mono"
+          >
+            or try demo mode →
+          </button>
         </motion.div>
 
         {/* Marquee ticker */}
