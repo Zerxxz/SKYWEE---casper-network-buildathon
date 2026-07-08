@@ -115,6 +115,18 @@ export async function POST(req: Request) {
         ],
       }
 
+      // CRITICAL FIX: Override the header.account field with the raw public key hex
+      // SDK's Deploy.toJSON() may serialize the account as a complex object or
+      // with a different format than what RPC expects. RPC expects raw hex like:
+      //   "0203220e30622aee8574de059922f3d9422c73d84b8372b5926f5e3e1e84277feb43"
+      // (tag byte 02 for Ed25519 + 64 hex chars = 66 chars total)
+      if (unsignedDeploy?.header) {
+        const header = deployToBroadcast.header as Record<string, unknown>
+        header.account = signer  // Use the exact same public key hex as the signer
+        deployToBroadcast.header = header
+        console.log("[broadcast] ✅ Overrode header.account with raw signer pubkey")
+      }
+
       console.log("[broadcast] ✅ Manual reconstruction complete")
       console.log("[broadcast] Deploy hash:", deployToBroadcast.hash)
       console.log("[broadcast] Approvals:", JSON.stringify(deployToBroadcast.approvals)?.substring(0, 200))
@@ -181,11 +193,32 @@ export async function POST(req: Request) {
     // Log the account field from header — this is what RPC validates
     const header = deployToBroadcast.header as Record<string, unknown> | undefined
     if (header) {
-      console.log("[broadcast] Header account (first 30):", header.account?.toString().substring(0, 30))
+      const accountStr = header.account?.toString() ?? ""
+      console.log("[broadcast] Header account FULL:", accountStr)
+      console.log("[broadcast] Header account length:", accountStr.length)
+      console.log("[broadcast] Header account first 2 chars:", accountStr.substring(0, 2))
       console.log("[broadcast] Header chainName:", header.chainName)
-      console.log("[broadcast] Header timestamp:", header.timestamp)
-      console.log("[broadcast] Header ttl:", header.ttl)
-      console.log("[broadcast] Header gasPrice:", header.gasPrice)
+    }
+
+    // Log approvals
+    const approvals = deployToBroadcast.approvals as Array<Record<string, unknown>> | undefined
+    if (approvals && approvals.length > 0) {
+      console.log("[broadcast] Approval[0] signer FULL:", approvals[0]?.signer?.toString())
+      console.log("[broadcast] Approval[0] signer length:", approvals[0]?.signer?.toString().length)
+      console.log("[broadcast] Approval[0] signature first 40:", approvals[0]?.signature?.toString().substring(0, 40))
+      console.log("[broadcast] Approval[0] signature length:", approvals[0]?.signature?.toString().length)
+    }
+
+    // Compare: signer public key from wallet vs account in header
+    // They should be the SAME public key
+    if (signedDeployObj?.signerPublicKey) {
+      const signerRaw = signedDeployObj.signerPublicKey
+      const signerStripped = signerRaw.startsWith("0x") ? signerRaw.slice(2) : signerRaw
+      console.log("[broadcast] === PUBLIC KEY COMPARISON ===")
+      console.log("[broadcast] Wallet signer (raw):", signerRaw.substring(0, 30))
+      console.log("[broadcast] Wallet signer (stripped):", signerStripped.substring(0, 30))
+      console.log("[broadcast] Header account:", header?.account?.toString().substring(0, 30))
+      console.log("[broadcast] Are they equal?", signerStripped === header?.account?.toString())
     }
 
     // Log full deploy JSON (truncated)
